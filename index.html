@@ -84,6 +84,34 @@
             .animate-fade-in {
                 animation: fade-in-up 0.4s ease-out forwards;
             }
+            .time-picker-button {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 2;
+                cursor: pointer;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 2px;
+                background: transparent;
+                border: none;
+                padding: 0;
+            }
+            .time-picker-period {
+                font-size: 13px;
+                font-weight: 500;
+                color: rgb(148, 163, 184);
+            }
+            .time-picker-time {
+                font-size: 15px;
+                font-weight: bold;
+                color: rgb(51, 65, 85);
+                font-family: monospace;
+                line-height: 1;
+            }
         </style>
     </head>
     <body class="text-slate-700 h-screen flex flex-col overflow-hidden">
@@ -99,10 +127,19 @@
                         <button @click="showTripMenu = true" class="text-teal-100 hover:text-white transition">
                             <i class="ph-bold ph-list text-2xl"></i>
                         </button>
-                        <div class="overflow-hidden">
+                        <div class="overflow-hidden flex-1">
                             <h1 class="text-xl font-bold tracking-wide flex items-center gap-2 truncate">
                                 {{ setup.destination || '旅遊計畫' }}
                                 <i class="ph-fill ph-airplane-tilt text-sm opacity-70"></i>
+                                <!-- 複製邀請碼按鈕（僅雲端旅程顯示） -->
+                                <button
+                                    v-if="isCloudTrip && inviteCode"
+                                    @click="copyInviteCode"
+                                    class="ml-1 w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
+                                    title="複製邀請碼"
+                                >
+                                    <i class="ph-bold ph-copy text-sm"></i>
+                                </button>
                             </h1>
                             <p class="text-xs text-teal-100 mt-0.5 font-light tracking-wider truncate">
                                 點擊下方日期切換行程
@@ -173,24 +210,29 @@
                             class="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-slate-100 flex justify-between items-start"
                         >
                             <div class="flex-1 relative pt-0.5">
-                                <!-- 隱形日期選擇器 -->
+                                <!-- 隱形日期選擇器（完全覆蓋整個日期區域） -->
                                 <input
                                     type="date"
                                     :value="currentDay.fullDate"
                                     @change="updateDate($event, currentDay)"
-                                    class="absolute top-0 left-0 w-40 h-8 opacity-0 z-20 cursor-pointer"
+                                    class="absolute top-0 left-0 right-0 bottom-0 w-full opacity-0 z-30 cursor-pointer"
+                                    style="height: 100%; min-height: 80px"
                                 />
                                 <!-- 日期顯示 -->
-                                <input
-                                    v-model="currentDay.date"
-                                    class="text-xl font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 w-full relative z-10 pointer-events-none"
-                                    placeholder="Day 1 (點擊設定)"
-                                />
-                                <input
-                                    v-model="currentDay.title"
-                                    class="text-sm text-slate-500 bg-transparent border-b border-dashed border-slate-300 focus:border-teal-500 focus:outline-none w-full mt-1"
-                                    placeholder="輸入當日主題"
-                                />
+                                <div class="relative z-10 pointer-events-none">
+                                    <input
+                                        v-model="currentDay.date"
+                                        class="text-xl font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0 w-full"
+                                        placeholder="Day 1 (點擊設定)"
+                                        readonly
+                                    />
+                                    <input
+                                        v-model="currentDay.title"
+                                        class="text-sm text-slate-500 bg-transparent border-b border-dashed border-slate-300 focus:border-teal-500 focus:outline-none w-full mt-1"
+                                        placeholder="輸入當日主題"
+                                        readonly
+                                    />
+                                </div>
                             </div>
                             <!-- 天氣顯示 -->
                             <div class="flex flex-col items-end pl-2">
@@ -315,19 +357,19 @@
                                                 <div
                                                     class="relative flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-xl p-1 w-full h-16 cursor-pointer hover:bg-teal-50 hover:border-teal-200 transition group/time"
                                                 >
-                                                    <span
-                                                        class="text-[10px] font-medium text-slate-400 group-hover/time:text-teal-400"
-                                                        >{{ getTimePeriod(item.time) }}</span
-                                                    >
-                                                    <span
-                                                        class="text-xl font-bold text-slate-700 group-hover/time:text-teal-600 leading-none font-mono tracking-tight"
-                                                        >{{ item.time || '--:--' }}</span
-                                                    >
                                                     <input
                                                         v-model="item.time"
                                                         type="time"
-                                                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-0"
                                                     />
+                                                    <button @click="openTimePickerFromEvent" class="time-picker-button">
+                                                        <span class="time-picker-period">
+                                                            {{ getTimePeriod(item.time) }}
+                                                        </span>
+                                                        <span class="time-picker-time">
+                                                            {{ item.time || '選擇時間 🕒' }}
+                                                        </span>
+                                                    </button>
                                                 </div>
                                                 <select
                                                     v-model="item.type"
@@ -476,16 +518,29 @@
                 <!-- 分帳視圖 -->
                 <div v-if="viewMode === 'money'" class="p-4 pb-24">
                     <div class="bg-teal-600 text-white rounded-2xl p-6 shadow-lg mb-6 text-center relative">
-                        <div class="absolute top-4 right-4 flex flex-col items-end">
-                            <label class="text-[10px] text-teal-200 mb-1">匯率 ({{ currencyLabel }})</label>
-                            <input
-                                v-model.number="exchangeRate"
-                                type="number"
-                                step="0.001"
-                                class="w-16 text-right text-xs text-teal-900 rounded px-1 py-0.5"
-                            />
+                        <div class="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
+                            <!-- 個人/多人記帳切換按鈕 -->
+                            <button
+                                @click="isPersonalMode = !isPersonalMode"
+                                :class="isPersonalMode ? 'bg-white text-teal-600' : 'bg-teal-500/30 text-white'"
+                                class="relative z-20 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm hover:bg-teal-500/50 flex items-center gap-1.5 cursor-pointer"
+                                title="切換個人/多人記帳模式"
+                            >
+                                <i :class="isPersonalMode ? 'ph-bold ph-user' : 'ph-bold ph-users'"></i>
+                                <span>{{ isPersonalMode ? '個人' : '多人' }}</span>
+                            </button>
+                            <!-- 匯率輸入 -->
+                            <div class="flex flex-col items-end relative z-10">
+                                <label class="text-[10px] text-teal-200 mb-1">匯率 ({{ currencyLabel }})</label>
+                                <input
+                                    v-model.number="exchangeRate"
+                                    type="number"
+                                    step="0.001"
+                                    class="w-16 text-right text-xs text-teal-900 rounded px-1 py-0.5"
+                                />
+                            </div>
                         </div>
-                        <div class="text-sm opacity-80 mb-1">總支出 Total</div>
+                        <div class="text-sm opacity-80 mb-1">{{ isPersonalMode ? '個人總支出' : '總支出 Total' }}</div>
                         <div class="text-4xl font-bold font-mono">
                             {{ currencySymbol }} {{ totalExpense.toLocaleString() }}
                         </div>
@@ -493,8 +548,8 @@
                             ≈ NT$ {{ Math.round(totalExpense * exchangeRate).toLocaleString() }}
                         </div>
                     </div>
-                    <!-- 成員設定 -->
-                    <div class="mb-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <!-- 成員設定（僅多人記帳模式顯示） -->
+                    <div v-if="!isPersonalMode" class="mb-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                         <div class="text-xs font-bold text-slate-400 mb-2">分帳成員 (用逗號分隔)</div>
                         <input
                             v-model="participantsStr"
@@ -503,7 +558,7 @@
                             placeholder="例如: 我, 朋友A, 朋友B"
                         />
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mb-6">
+                    <div v-if="!isPersonalMode" class="grid grid-cols-2 gap-2 mb-6">
                         <div
                             v-for="p in participants"
                             :key="p"
@@ -515,7 +570,10 @@
                             </div>
                         </div>
                     </div>
-                    <div v-if="settlementPlan.length > 0" class="bg-teal-50 rounded-xl p-4 mb-6 border border-teal-100">
+                    <div
+                        v-if="!isPersonalMode && settlementPlan.length > 0"
+                        class="bg-teal-50 rounded-xl p-4 mb-6 border border-teal-100"
+                    >
                         <h3 class="text-xs font-bold text-teal-400 uppercase tracking-wide mb-3">結帳建議</h3>
                         <div class="space-y-2">
                             <div
@@ -540,6 +598,7 @@
                                 class="flex-1 bg-slate-50 border-none rounded-lg text-sm px-3 py-2"
                             />
                             <select
+                                v-if="!isPersonalMode"
                                 v-model="newExpense.payer"
                                 class="w-[120px] bg-slate-50 border-none rounded-lg text-sm px-2 py-2 min-w-0"
                             >
@@ -571,15 +630,22 @@
                     </div>
                     <div class="space-y-3">
                         <div
-                            v-for="(exp, idx) in expenses"
+                            v-for="(exp, idx) in currentExpenses"
                             :key="idx"
                             class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm"
                         >
                             <div class="flex items-center gap-3">
                                 <div
+                                    v-if="!isPersonalMode"
                                     class="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center text-teal-600 text-xs font-bold"
                                 >
                                     {{ exp.payer.charAt(0) }}
+                                </div>
+                                <div
+                                    v-else
+                                    class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold"
+                                >
+                                    <i class="ph-bold ph-user"></i>
                                 </div>
                                 <div><div class="font-bold text-slate-700 text-sm">{{ exp.item }}</div></div>
                             </div>
@@ -903,6 +969,35 @@
                 });
             }
 
+            // Firebase 工具函數
+            const getFirestoreModule = async () => await loadFirebaseFirestore();
+
+            const waitForDb = async () => {
+                if (!useFirebase) return null;
+                let attempts = 0;
+                while (!db && attempts < DB_WAIT_MAX_ATTEMPTS) {
+                    await new Promise((resolve) => setTimeout(resolve, DB_WAIT_INTERVAL));
+                    attempts++;
+                }
+                return db;
+            };
+
+            const checkFirebaseReady = async () => {
+                if (!useFirebase) return { ready: false, error: 'Firebase 未啟用' };
+                const firestoreDb = await waitForDb();
+                if (!firestoreDb) return { ready: false, error: 'Firebase 連線失敗' };
+                return { ready: true, db: firestoreDb };
+            };
+
+            // --- Constants ---
+            const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+            const DEFAULT_PARTICIPANTS = ['我', '旅伴A'];
+            const DEFAULT_PARTICIPANTS_STR = '我, 旅伴A';
+            const DEFAULT_EXCHANGE_RATE = 0.215;
+            const AUTO_SYNC_DELAY = 1000;
+            const DB_WAIT_MAX_ATTEMPTS = 50;
+            const DB_WAIT_INTERVAL = 100;
+
             createApp({
                 setup() {
                     const viewMode = ref('plan');
@@ -927,10 +1022,13 @@
                     // 資料
                     const days = ref([]);
                     const expenses = ref([]);
-                    const participants = ref(['我', '旅伴A']);
-                    const participantsStr = ref('我, 旅伴A');
-                    const exchangeRate = ref(0.215);
+                    const personalExpenses = ref([]); // 個人記帳列表
+                    const isPersonalMode = ref(false); // 個人/多人記帳模式切換
+                    const participants = ref([...DEFAULT_PARTICIPANTS]);
+                    const participantsStr = ref(DEFAULT_PARTICIPANTS_STR);
+                    const exchangeRate = ref(DEFAULT_EXCHANGE_RATE);
                     const newExpense = ref({ item: '', amount: '', payer: '我', time: '' });
+                    const timeInputRefs = ref({}); // 時間輸入框的 ref 引用
 
                     // 暫存與設定
                     const isRateLoading = ref(false);
@@ -963,7 +1061,13 @@
                     const currentDay = computed(
                         () => days.value[currentDayIdx.value] || { items: [], flight: null, date: '', title: '' }
                     );
-                    const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + item.amount, 0));
+                    const totalExpense = computed(() => {
+                        const expenseList = isPersonalMode.value ? personalExpenses.value : expenses.value;
+                        return expenseList.reduce((sum, item) => sum + item.amount, 0);
+                    });
+                    const currentExpenses = computed(() => {
+                        return isPersonalMode.value ? personalExpenses.value : expenses.value;
+                    });
                     const paidByPerson = computed(() => {
                         const map = {};
                         participants.value.forEach((p) => (map[p] = 0));
@@ -974,6 +1078,7 @@
                         return map;
                     });
                     const settlementPlan = computed(() => {
+                        if (isPersonalMode.value) return []; // 個人記帳不顯示結帳建議
                         if (totalExpense.value === 0) return [];
                         const average = totalExpense.value / participants.value.length;
                         let balances = participants.value.map((p) => ({
@@ -998,7 +1103,7 @@
                         }
                         return result;
                     });
-                    const currencyLabel = computed(() => setup.value.currency || '外幣');
+                    const currencyLabel = computed(() => setup.value?.currency || '外幣');
                     const currencySymbol = computed(() => {
                         const map = {
                             JPY: '¥',
@@ -1012,18 +1117,19 @@
                             THB: '฿',
                             VND: '₫',
                         };
-                        return map[setup.value.currency] || '$';
+                        return map[setup.value?.currency] || '$';
                     });
                     const inviteLink = computed(() => {
                         if (!inviteCode.value) return '';
                         return `${window.location.origin}${window.location.pathname}?code=${inviteCode.value}`;
                     });
                     const weatherDisplay = computed(() => {
+                        const destination = setup.value?.destination || '當地';
                         if (!currentDay.value || !currentDay.value.fullDate || weather.value.daily.length === 0) {
                             return {
                                 temp: weather.value.temp !== null ? `${weather.value.temp}°` : '--',
                                 icon: weather.value.icon || 'ph-sun',
-                                label: `${setup.value.destination || '當地'} (目前)`,
+                                label: `${destination} (目前)`,
                                 isForecast: false,
                             };
                         }
@@ -1035,20 +1141,19 @@
                             return {
                                 temp: `${min}° - ${max}°`,
                                 icon: getWeatherIcon(weather.value.daily.weathercode[idx]),
-                                label: `${setup.value.destination} (預報)`,
+                                label: `${destination} (預報)`,
                                 isForecast: true,
                             };
                         }
                         return {
                             temp: weather.value.temp !== null ? `${weather.value.temp}°` : '--',
                             icon: weather.value.icon || 'ph-sun',
-                            label: `${setup.value.destination} (目前)`,
+                            label: `${destination} (目前)`,
                             isForecast: false,
                         };
                     });
 
                     // --- Helpers ---
-                    const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'];
                     const getTodayDateStr = () => new Date().toISOString().split('T')[0];
                     const generateId = () =>
                         'trip_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
@@ -1060,9 +1165,21 @@
                         return 'ph-cloud';
                     };
                     const getTimePeriod = (t) => {
-                        if (!t) return '時間';
+                        if (!t) return '';
                         const h = parseInt(t.split(':')[0]);
                         return h < 5 ? '凌晨' : h < 11 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上';
+                    };
+                    const formatDate = (date) => {
+                        const d = new Date(date);
+                        if (isNaN(d.getTime())) return null;
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const w = WEEKDAY_ZH[d.getDay()];
+                        return {
+                            date: `${mm}/${dd} (${w})`,
+                            shortDate: `${mm}/${dd}`,
+                            fullDate: date,
+                        };
                     };
                     const toggleFlightCard = () => {
                         if (currentDay.value.flight) {
@@ -1096,17 +1213,28 @@
                     const updateDate = (e, day) => {
                         const val = e.target.value;
                         if (!val) return;
-                        day.fullDate = val;
-                        const d = new Date(val);
-                        if (isNaN(d.getTime())) return;
-                        const w = WEEKDAY_ZH[d.getDay()];
-                        const mm = d.getMonth() + 1;
-                        const dd = d.getDate();
-                        day.date = `${mm < 10 ? '0' + mm : mm}/${dd < 10 ? '0' + dd : dd} (${w})`;
-                        day.shortDate = `${mm}/${dd}`;
+                        const formatted = formatDate(val);
+                        if (!formatted) return;
+                        Object.assign(day, formatted);
                     };
 
                     // --- Core ---
+                    const openTimePicker = (refKey) => {
+                        // 通過 ref 觸發隱藏的時間輸入框點擊
+                        const timeInput = timeInputRefs.value[refKey];
+                        if (timeInput) {
+                            timeInput.click();
+                        }
+                    };
+                    const openTimePickerFromEvent = (event) => {
+                        // 通過事件對象找到按鈕的父元素，然後找到其中的 input[type="time"]
+                        const container = event.currentTarget?.closest('.relative');
+                        const timeInput = container?.querySelector('input[type="time"]');
+                        if (timeInput) {
+                            // 優先使用 showPicker API（現代瀏覽器），否則回退到 click
+                            timeInput.showPicker?.() || timeInput.click();
+                        }
+                    };
                     const addItem = () =>
                         currentDay.value.items.push({ time: '', type: 'spot', activity: '', location: '', note: '' });
                     const removeItem = (idx) => currentDay.value.items.splice(idx, 1);
@@ -1137,7 +1265,7 @@
                             expensesSyncAbortFlag = true;
                         }
 
-                        // 1 秒後再執行同步，期間的新增/刪除會被合併
+                        // 延遲後再執行同步，期間的新增/刪除會被合併
                         expensesAutoSyncTimer = setTimeout(async () => {
                             expensesAutoSyncTimer = null;
 
@@ -1167,7 +1295,7 @@
                                 expensesSyncInProgress = false;
                                 expensesSyncAbortFlag = false;
                             }
-                        }, 1000);
+                        }, AUTO_SYNC_DELAY);
                     };
 
                     // 格式化時間函數：將 datetime-local 格式轉換為 "YYYY-MM-DD HH:mm→" 格式
@@ -1180,13 +1308,9 @@
 
                     const addExpense = () => {
                         if (newExpense.value.item) {
-                            // 如果是雲端旅程，標記為本地更新，避免觸發監聽器
-                            if (isCloudTrip.value && cloudTripId.value) {
-                                isLocalUpdate = true;
-                            }
-
-                            // 建立唯一的 order 值（時間戳 + 付款人）
-                            const order = `${Date.now()}_${newExpense.value.payer || 'payer'}`;
+                            // 建立唯一的 order 值
+                            const payer = isPersonalMode.value ? 'personal' : newExpense.value.payer || 'payer';
+                            const order = `${Date.now()}_${payer}`;
 
                             // 如果有設定時間，將時間格式化並加到 item 前面
                             let itemWithTime = newExpense.value.item;
@@ -1198,39 +1322,65 @@
                             const expense = {
                                 item: itemWithTime,
                                 amount: newExpense.value.amount,
-                                payer: newExpense.value.payer,
+                                payer: isPersonalMode.value ? '個人' : payer,
                                 order,
                             };
 
-                            // 先更新本地資料（放到最前面）
-                            expenses.value.unshift(expense);
+                            if (isPersonalMode.value) {
+                                // 個人記帳模式
+                                personalExpenses.value.unshift(expense);
+                                saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
+                                // 上傳到 Firebase（不設置監聽器）
+                                if (useFirebase && isCloudTrip.value && cloudTripId.value) {
+                                    addPersonalExpenseToCloud(expense);
+                                }
+                            } else {
+                                // 多人記帳模式
+                                // 如果是雲端旅程，標記為本地更新，避免觸發監聽器
+                                if (isCloudTrip.value && cloudTripId.value) {
+                                    isLocalUpdate = true;
+                                }
+                                expenses.value.unshift(expense);
+                                // 新增上傳至 Firestore（sharedExpenses），使用 order 作為文件 ID
+                                if (useFirebase && isCloudTrip.value && cloudTripId.value) {
+                                    addExpenseToCloudByOrder(expense);
+                                }
+                            }
+
                             // 只清空項目和金額，保留時間與付款人
                             newExpense.value.item = '';
                             newExpense.value.amount = '';
-
-                            // 新增上傳至 Firestore（sharedExpenses），使用 order 作為文件 ID
-                            if (useFirebase && isCloudTrip.value && cloudTripId.value) {
-                                addExpenseToCloudByOrder(expense);
-                            }
                         }
                     };
                     const removeExpense = (idx) => {
-                        const target = expenses.value[idx];
-                        if (!target) return;
+                        if (isPersonalMode.value) {
+                            // 個人記帳模式
+                            const target = personalExpenses.value[idx];
+                            if (!target) return;
 
-                        // 如果是雲端旅程，標記為本地更新，避免觸發監聽器，並嘗試同步刪除 Firestore 中對應帳目
-                        if (isCloudTrip.value && cloudTripId.value) {
-                            isLocalUpdate = true;
+                            personalExpenses.value.splice(idx, 1);
+                            saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
 
-                            const targetOrder = target.order;
-                            if (targetOrder && useFirebase) {
-                                // 非同步呼叫，背景執行刪除（不影響前端體驗）
-                                deleteExpenseFromCloudByOrder(targetOrder);
+                            // 刪除 Firebase 中的記錄
+                            if (useFirebase && isCloudTrip.value && cloudTripId.value && target.order) {
+                                deletePersonalExpenseFromCloud(target.order);
                             }
-                        }
+                        } else {
+                            // 多人記帳模式
+                            const target = expenses.value[idx];
+                            if (!target) return;
 
-                        // 先刪除本地資料
-                        expenses.value.splice(idx, 1);
+                            // 如果是雲端旅程，標記為本地更新，避免觸發監聽器，並嘗試同步刪除 Firestore 中對應帳目
+                            if (isCloudTrip.value && cloudTripId.value) {
+                                isLocalUpdate = true;
+                                if (target.order && useFirebase) {
+                                    // 非同步呼叫，背景執行刪除（不影響前端體驗）
+                                    deleteExpenseFromCloudByOrder(target.order);
+                                }
+                            }
+
+                            expenses.value.splice(idx, 1);
+                        }
                     };
 
                     // --- LBS 推薦功能 ---
@@ -1353,6 +1503,18 @@
                         }
                     };
 
+                    // --- LocalStorage 工具函數 ---
+                    const getStorageKey = (tripId, suffix) => `${tripId}_${suffix}`;
+                    const saveToStorage = (tripId, suffix, data) => {
+                        if (!tripId) return;
+                        localStorage.setItem(getStorageKey(tripId, suffix), JSON.stringify(data));
+                    };
+                    const loadFromStorage = (tripId, suffix, defaultValue = null) => {
+                        if (!tripId) return defaultValue;
+                        const item = localStorage.getItem(getStorageKey(tripId, suffix));
+                        return item ? JSON.parse(item) : defaultValue;
+                    };
+
                     // --- Trip Management ---
                     const loadTripList = () => {
                         const list = localStorage.getItem('travel_app_index');
@@ -1368,22 +1530,19 @@
                                 daysCount: 7,
                             };
                             tripList.value.push(defaultTrip);
-                            localStorage.setItem(`${JP_TRIP_ID}_days`, JSON.stringify(JP_TRIP_DATA));
-                            localStorage.setItem(`${JP_TRIP_ID}_exp`, JSON.stringify(JP_EXPENSES));
-                            localStorage.setItem(`${JP_TRIP_ID}_users`, '我, 旅伴A');
-                            localStorage.setItem(`${JP_TRIP_ID}_rate`, '0.215');
-                            localStorage.setItem(
-                                `${JP_TRIP_ID}_config`,
-                                JSON.stringify({
-                                    destination: 'Japan',
-                                    startDate: '2025-02-17',
-                                    days: 7,
-                                    rate: 0.215,
-                                    currency: 'JPY',
-                                    langCode: 'ja',
-                                    langName: '日文',
-                                })
-                            );
+                            saveToStorage(JP_TRIP_ID, 'days', JP_TRIP_DATA);
+                            saveToStorage(JP_TRIP_ID, 'exp', JP_EXPENSES);
+                            localStorage.setItem(getStorageKey(JP_TRIP_ID, 'users'), DEFAULT_PARTICIPANTS_STR);
+                            localStorage.setItem(getStorageKey(JP_TRIP_ID, 'rate'), String(DEFAULT_EXCHANGE_RATE));
+                            saveToStorage(JP_TRIP_ID, 'config', {
+                                destination: 'Japan',
+                                startDate: '2025-02-17',
+                                days: 7,
+                                rate: DEFAULT_EXCHANGE_RATE,
+                                currency: 'JPY',
+                                langCode: 'ja',
+                                langName: '日文',
+                            });
                             saveTripList();
                         }
                     };
@@ -1395,7 +1554,7 @@
                             destination: '',
                             startDate: getTodayDateStr(),
                             days: 5,
-                            rate: 0.215,
+                            rate: DEFAULT_EXCHANGE_RATE,
                             currency: 'JPY',
                             langCode: 'ja',
                             langName: '日文',
@@ -1421,15 +1580,15 @@
                         for (let i = 0; i < setup.value.days; i++) {
                             const curr = new Date(start);
                             curr.setDate(start.getDate() + i);
-                            const mm = curr.getMonth() + 1;
-                            const dd = curr.getDate();
                             const yyyy = curr.getFullYear();
-                            const fullDate = `${yyyy}-${mm < 10 ? '0' + mm : mm}-${dd < 10 ? '0' + dd : dd}`;
+                            const mm = String(curr.getMonth() + 1).padStart(2, '0');
+                            const dd = String(curr.getDate()).padStart(2, '0');
+                            const fullDate = `${yyyy}-${mm}-${dd}`;
+                            const formatted = formatDate(fullDate);
+
                             newDays.push({
-                                date: `${mm < 10 ? '0' + mm : mm}/${dd < 10 ? '0' + dd : dd} (${
-                                    WEEKDAY_ZH[curr.getDay()]
-                                })`,
-                                shortDate: `${mm}/${dd}`,
+                                date: formatted?.date || `${mm}/${dd} (${WEEKDAY_ZH[curr.getDay()]})`,
+                                shortDate: formatted?.shortDate || `${mm}/${dd}`,
                                 fullDate: fullDate,
                                 title: i === 0 ? '抵達 & 探索' : '行程規劃',
                                 items: [],
@@ -1437,11 +1596,11 @@
                             });
                         }
 
-                        localStorage.setItem(`${newId}_days`, JSON.stringify(newDays));
-                        localStorage.setItem(`${newId}_exp`, '[]');
-                        localStorage.setItem(`${newId}_users`, '我, 旅伴A');
-                        localStorage.setItem(`${newId}_rate`, setup.value.rate.toString());
-                        localStorage.setItem(`${newId}_config`, JSON.stringify(setup.value));
+                        saveToStorage(newId, 'days', newDays);
+                        saveToStorage(newId, 'exp', []);
+                        localStorage.setItem(getStorageKey(newId, 'users'), DEFAULT_PARTICIPANTS_STR);
+                        localStorage.setItem(getStorageKey(newId, 'rate'), setup.value.rate.toString());
+                        saveToStorage(newId, 'config', setup.value);
 
                         tripList.value.unshift(newTripMeta);
                         saveTripList();
@@ -1453,15 +1612,20 @@
                         if (!confirm('確定刪除此行程？無法復原。')) return;
                         tripList.value = tripList.value.filter((t) => t.id !== id);
                         saveTripList();
-                        localStorage.removeItem(`${id}_days`);
-                        localStorage.removeItem(`${id}_exp`);
-                        localStorage.removeItem(`${id}_users`);
-                        localStorage.removeItem(`${id}_rate`);
-                        localStorage.removeItem(`${id}_config`);
+
+                        // 清除所有相關的 localStorage 資料
+                        ['days', 'exp', 'personal_exp', 'users', 'rate', 'config', 'cloud', 'synced'].forEach(
+                            (suffix) => {
+                                localStorage.removeItem(getStorageKey(id, suffix));
+                            }
+                        );
+
                         if (currentTripId.value === id) {
                             if (tripList.value.length > 0) switchTrip(tripList.value[0].id);
                             else {
                                 days.value = [];
+                                expenses.value = [];
+                                personalExpenses.value = [];
                                 currentTripId.value = null;
                                 showSetupModal.value = true;
                             }
@@ -1476,24 +1640,26 @@
 
                         currentTripId.value = id;
                         showTripMenu.value = false;
-                        const lDays = localStorage.getItem(`${id}_days`);
-                        const lExp = localStorage.getItem(`${id}_exp`);
-                        const lUsers = localStorage.getItem(`${id}_users`);
-                        const lRate = localStorage.getItem(`${id}_rate`);
-                        const lConf = localStorage.getItem(`${id}_config`);
-                        const lCloud = localStorage.getItem(`${id}_cloud`);
+
+                        // 載入本地資料
+                        days.value = loadFromStorage(id, 'days', []);
+                        expenses.value = loadFromStorage(id, 'exp', []);
+                        personalExpenses.value = loadFromStorage(id, 'personal_exp', []);
+
+                        const lUsers = localStorage.getItem(getStorageKey(id, 'users'));
+                        const lRate = localStorage.getItem(getStorageKey(id, 'rate'));
+                        const lConf = loadFromStorage(id, 'config');
+                        const lCloud = loadFromStorage(id, 'cloud');
 
                         // 檢查是否為雲端旅程
                         if (lCloud) {
-                            const cloudData = JSON.parse(lCloud);
-                            isCloudTrip.value = cloudData.isCloudTrip || false;
-                            cloudTripId.value = cloudData.cloudTripId || null;
-                            inviteCode.value = cloudData.inviteCode || '';
+                            isCloudTrip.value = lCloud.isCloudTrip || false;
+                            cloudTripId.value = lCloud.cloudTripId || null;
+                            inviteCode.value = lCloud.inviteCode || '';
 
                             // 如果是雲端旅程，自動同步資料並設定即時監聽
                             if (isCloudTrip.value && cloudTripId.value) {
                                 await syncFromCloud();
-                                // 設定即時監聽 sharedExpenses
                                 await setupExpensesRealtimeListener();
                             }
                         } else {
@@ -1502,28 +1668,21 @@
                             inviteCode.value = '';
                         }
 
-                        if (lDays) days.value = JSON.parse(lDays);
-                        if (lExp) expenses.value = JSON.parse(lExp);
                         if (lUsers) {
                             participantsStr.value = lUsers;
                             updateParticipants();
                         }
                         if (lRate) exchangeRate.value = parseFloat(lRate);
                         if (lConf) {
-                            const conf = JSON.parse(lConf);
-                            setup.value = conf;
-                            fetchWeather(conf.destination);
+                            setup.value = lConf;
+                            fetchWeather(lConf.destination);
                         }
                     };
 
                     // --- Firebase 雲端功能 ---
                     // 設定 sharedExpenses 的即時監聽器（只監聽分帳功能）
                     const setupExpensesRealtimeListener = async () => {
-                        if (!useFirebase || !cloudTripId.value) {
-                            return;
-                        }
-
-                        const firestoreDb = await waitForDb();
+                        const firestoreDb = await checkCloudFirebaseReady();
                         if (!firestoreDb) {
                             console.warn('⚠️ Firebase 連線失敗，無法設定即時監聽');
                             return;
@@ -1687,12 +1846,18 @@
                         });
                     };
 
+                    // 檢查 Firebase 和雲端狀態的輔助函數
+                    const checkCloudFirebaseReady = async () => {
+                        if (!useFirebase || !cloudTripId.value) return null;
+                        const result = await checkFirebaseReady();
+                        return result.ready ? result.db : null;
+                    };
+
                     // 依照 order（時間戳 + payerName）新增一筆 sharedExpenses 到 Firestore（使用 order 作為文件 ID）
                     const addExpenseToCloudByOrder = async (expense) => {
                         try {
-                            if (!useFirebase || !cloudTripId.value || !expense?.order) return;
-
-                            const firestoreDb = await waitForDb();
+                            if (!expense?.order) return;
+                            const firestoreDb = await checkCloudFirebaseReady();
                             if (!firestoreDb) return;
 
                             const firestoreModule = await getFirestoreModule();
@@ -1720,12 +1885,66 @@
                         }
                     };
 
+                    // 個人記帳：上傳到 Firebase（不設置監聽器）
+                    const addPersonalExpenseToCloud = async (expense) => {
+                        try {
+                            if (!expense?.order) return;
+                            const firestoreDb = await checkCloudFirebaseReady();
+                            if (!firestoreDb) return;
+
+                            const firestoreModule = await getFirestoreModule();
+                            const { collection, doc, setDoc, Timestamp } = firestoreModule;
+
+                            const personalExpensesCollection = collection(
+                                firestoreDb,
+                                `trips/${cloudTripId.value}/personalExpenses`
+                            );
+
+                            // 使用 order 作為文件 ID
+                            const expenseDocRef = doc(personalExpensesCollection, expense.order);
+
+                            await setDoc(expenseDocRef, {
+                                item: expense.item,
+                                amount: expense.amount,
+                                payerName: expense.payer,
+                                order: expense.order,
+                                createdAt: Timestamp.now(),
+                            });
+
+                            console.log('✅ 已新增個人記帳到 Firestore（order =', expense.order, '）');
+                        } catch (error) {
+                            console.error('❌ 新增個人記帳到 Firestore 失敗:', error);
+                        }
+                    };
+
+                    // 個人記帳：從 Firebase 刪除
+                    const deletePersonalExpenseFromCloud = async (order) => {
+                        try {
+                            if (!order) return;
+                            const firestoreDb = await checkCloudFirebaseReady();
+                            if (!firestoreDb) return;
+
+                            const firestoreModule = await getFirestoreModule();
+                            const { collection, doc, deleteDoc } = firestoreModule;
+
+                            const personalExpensesCollection = collection(
+                                firestoreDb,
+                                `trips/${cloudTripId.value}/personalExpenses`
+                            );
+
+                            const expenseDocRef = doc(personalExpensesCollection, order);
+                            await deleteDoc(expenseDocRef);
+
+                            console.log('✅ 已刪除個人記帳（order =', order, '）');
+                        } catch (error) {
+                            console.error('❌ 刪除個人記帳失敗:', error);
+                        }
+                    };
+
                     // 依照 order（時間戳 + payerName）刪除 Firestore 上對應的 sharedExpenses 文件
                     const deleteExpenseFromCloudByOrder = async (order) => {
                         try {
-                            if (!useFirebase || !cloudTripId.value) return;
-
-                            const firestoreDb = await waitForDb();
+                            const firestoreDb = await checkCloudFirebaseReady();
                             if (!firestoreDb) return;
 
                             const firestoreModule = await getFirestoreModule();
@@ -1984,20 +2203,7 @@
                     };
 
                     // 統一獲取 Firestore 模組（使用緩存，避免重複載入）
-                    const getFirestoreModule = async () => {
-                        return await loadFirebaseFirestore();
-                    };
-
-                    // 等待 db 初始化完成
-                    const waitForDb = async () => {
-                        if (!useFirebase) return null;
-                        let attempts = 0;
-                        while (!db && attempts < 50) {
-                            await new Promise((resolve) => setTimeout(resolve, 100));
-                            attempts++;
-                        }
-                        return db;
-                    };
+                    // 注意：getFirestoreModule 和 waitForDb 已在全局定義
 
                     // 檢查當前旅程的雲端狀態
                     const checkCloudStatus = () => {
@@ -2012,6 +2218,9 @@
                         const cloudDataStr = localStorage.getItem(`${currentTripId.value}_cloud`);
                         const cloudData = cloudDataStr ? JSON.parse(cloudDataStr) : null;
 
+                        const getStorageStatus = (key) =>
+                            localStorage.getItem(`${currentTripId.value}_${key}`) ? '存在' : '不存在';
+
                         const status = {
                             currentTripId: currentTripId.value,
                             hasCloudData: !!cloudData,
@@ -2022,9 +2231,9 @@
                                 inviteCode: inviteCode.value,
                             },
                             localStorage: {
-                                days: localStorage.getItem(`${currentTripId.value}_days`) ? '存在' : '不存在',
-                                expenses: localStorage.getItem(`${currentTripId.value}_exp`) ? '存在' : '不存在',
-                                config: localStorage.getItem(`${currentTripId.value}_config`) ? '存在' : '不存在',
+                                days: getStorageStatus('days'),
+                                expenses: getStorageStatus('exp'),
+                                config: getStorageStatus('config'),
                                 cloud: cloudDataStr ? '存在' : '不存在',
                             },
                         };
@@ -2350,7 +2559,7 @@
                                 inviteCode: inviteCodeToUse,
                                 isCloudTrip: true,
                             };
-                            localStorage.setItem(`${currentTripId.value}_cloud`, JSON.stringify(cloudData));
+                            saveToStorage(currentTripId.value, 'cloud', cloudData);
 
                             // 更新 Vue 狀態
                             isCloudTrip.value = true;
@@ -2399,11 +2608,8 @@
 
                     // 從雲端同步資料（單向拉取：Firebase → 本地，覆蓋本地資料）
                     const syncFromCloud = async () => {
-                        if (!useFirebase || !cloudTripId.value) {
-                            console.log('❌ 無法同步：', {
-                                useFirebase,
-                                cloudTripId: cloudTripId.value,
-                            });
+                        if (!cloudTripId.value) {
+                            console.log('❌ 無法同步：沒有 cloudTripId');
                             return;
                         }
 
@@ -2411,12 +2617,13 @@
                             cloudTripId: cloudTripId.value,
                         });
 
-                        const firestoreDb = await waitForDb();
+                        const firestoreDb = await checkCloudFirebaseReady();
                         if (!firestoreDb) {
                             console.warn('❌ Firebase 連線失敗，無法同步');
                             // 檢查是否有本地已同步的資料可以使用
                             if (currentTripId.value) {
-                                const hasLocalData = localStorage.getItem(`${currentTripId.value}_synced`) === 'true';
+                                const hasLocalData =
+                                    localStorage.getItem(getStorageKey(currentTripId.value, 'synced')) === 'true';
                                 if (hasLocalData) {
                                     console.log('✅ 使用本地已儲存的資料（最後一次同步的資料）');
                                     // 資料已經在 switchTrip 時從 localStorage 載入了，所以不需要再做什麼
@@ -2531,24 +2738,27 @@
 
                             // 完整更新 localStorage（確保離線時也能看到最後同步的資料）
                             if (currentTripId.value) {
-                                localStorage.setItem(`${currentTripId.value}_days`, JSON.stringify(days.value));
-                                localStorage.setItem(`${currentTripId.value}_exp`, JSON.stringify(expenses.value));
-                                localStorage.setItem(`${currentTripId.value}_config`, JSON.stringify(setup.value));
-                                localStorage.setItem(`${currentTripId.value}_rate`, exchangeRate.value.toString());
-
-                                // 儲存 participants（如果有的話，保持本地設定）
-                                localStorage.setItem(`${currentTripId.value}_users`, participantsStr.value);
+                                saveToStorage(currentTripId.value, 'days', days.value);
+                                saveToStorage(currentTripId.value, 'exp', expenses.value);
+                                saveToStorage(currentTripId.value, 'config', setup.value);
+                                localStorage.setItem(
+                                    getStorageKey(currentTripId.value, 'rate'),
+                                    exchangeRate.value.toString()
+                                );
+                                localStorage.setItem(
+                                    getStorageKey(currentTripId.value, 'users'),
+                                    participantsStr.value
+                                );
 
                                 // 更新雲端資訊，加上最後同步時間
-                                const cloudData = localStorage.getItem(`${currentTripId.value}_cloud`);
+                                const cloudData = loadFromStorage(currentTripId.value, 'cloud');
                                 if (cloudData) {
-                                    const cloud = JSON.parse(cloudData);
-                                    cloud.lastSyncedAt = new Date().toISOString();
-                                    localStorage.setItem(`${currentTripId.value}_cloud`, JSON.stringify(cloud));
+                                    cloudData.lastSyncedAt = new Date().toISOString();
+                                    saveToStorage(currentTripId.value, 'cloud', cloudData);
                                 }
 
                                 // 標記資料已從雲端同步（用於離線時顯示提示）
-                                localStorage.setItem(`${currentTripId.value}_synced`, 'true');
+                                localStorage.setItem(getStorageKey(currentTripId.value, 'synced'), 'true');
                             }
 
                             // 驗證資料完整性
@@ -2719,32 +2929,28 @@
 
                         // 遍歷所有旅程，清除本地端資料
                         let cloudTripsCount = 0;
+                        const storageKeysToRemove = ['days', 'exp', 'users', 'rate', 'config', 'synced'];
+
                         tripList.value.forEach((trip) => {
                             // 檢查是否為雲端旅程
-                            const cloudData = localStorage.getItem(`${trip.id}_cloud`);
-                            if (cloudData) {
-                                const cloud = JSON.parse(cloudData);
-                                if (cloud.isCloudTrip) {
-                                    cloudTripsCount++;
-                                }
+                            const cloudData = loadFromStorage(trip.id, 'cloud');
+                            if (cloudData?.isCloudTrip) {
+                                cloudTripsCount++;
                             }
 
                             // 刪除所有相關的 localStorage 資料（但保留 cloud 資訊）
-                            localStorage.removeItem(`${trip.id}_days`);
-                            localStorage.removeItem(`${trip.id}_exp`);
-                            localStorage.removeItem(`${trip.id}_users`);
-                            localStorage.removeItem(`${trip.id}_rate`);
-                            localStorage.removeItem(`${trip.id}_config`);
-                            localStorage.removeItem(`${trip.id}_synced`);
+                            storageKeysToRemove.forEach((suffix) => {
+                                localStorage.removeItem(getStorageKey(trip.id, suffix));
+                            });
                             // 注意：不刪除 cloud 資料，這樣使用者之後還可以同步
                         });
 
                         // 清空當前顯示的資料
                         days.value = [];
                         expenses.value = [];
-                        participants.value = ['我', '旅伴A'];
-                        participantsStr.value = '我, 旅伴A';
-                        exchangeRate.value = 0.215;
+                        participants.value = [...DEFAULT_PARTICIPANTS];
+                        participantsStr.value = DEFAULT_PARTICIPANTS_STR;
+                        exchangeRate.value = DEFAULT_EXCHANGE_RATE;
                         // 保留雲端狀態資訊，這樣按鈕還會顯示
 
                         if (cloudTripsCount > 0) {
@@ -2817,14 +3023,17 @@
                                     inviteCode: code,
                                     isCloudTrip: true,
                                 };
-                                localStorage.setItem(`${newLocalId}_cloud`, JSON.stringify(cloudData));
+                                saveToStorage(newLocalId, 'cloud', cloudData);
 
                                 // 初始化空的資料
-                                localStorage.setItem(`${newLocalId}_days`, '[]');
-                                localStorage.setItem(`${newLocalId}_exp`, '[]');
-                                localStorage.setItem(`${newLocalId}_users`, '我, 旅伴A');
-                                localStorage.setItem(`${newLocalId}_rate`, (tripData.config?.rate || 0.215).toString());
-                                localStorage.setItem(`${newLocalId}_config`, JSON.stringify(tripData.config || {}));
+                                saveToStorage(newLocalId, 'days', []);
+                                saveToStorage(newLocalId, 'exp', []);
+                                localStorage.setItem(getStorageKey(newLocalId, 'users'), DEFAULT_PARTICIPANTS_STR);
+                                localStorage.setItem(
+                                    getStorageKey(newLocalId, 'rate'),
+                                    (tripData.config?.rate || DEFAULT_EXCHANGE_RATE).toString()
+                                );
+                                saveToStorage(newLocalId, 'config', tripData.config || {});
 
                                 tripList.value.unshift(newTripMeta);
                                 saveTripList();
@@ -2862,10 +3071,25 @@
                             [days, expenses, exchangeRate, participantsStr],
                             () => {
                                 if (!currentTripId.value) return;
-                                localStorage.setItem(`${currentTripId.value}_days`, JSON.stringify(days.value));
-                                localStorage.setItem(`${currentTripId.value}_exp`, JSON.stringify(expenses.value));
-                                localStorage.setItem(`${currentTripId.value}_rate`, exchangeRate.value.toString());
-                                localStorage.setItem(`${currentTripId.value}_users`, participantsStr.value);
+                                saveToStorage(currentTripId.value, 'days', days.value);
+                                saveToStorage(currentTripId.value, 'exp', expenses.value);
+                                localStorage.setItem(
+                                    getStorageKey(currentTripId.value, 'rate'),
+                                    exchangeRate.value.toString()
+                                );
+                                localStorage.setItem(
+                                    getStorageKey(currentTripId.value, 'users'),
+                                    participantsStr.value
+                                );
+                            },
+                            { deep: true }
+                        );
+                        // 監聽個人記帳變化並自動儲存
+                        watch(
+                            personalExpenses,
+                            () => {
+                                if (!currentTripId.value) return;
+                                saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
                             },
                             { deep: true }
                         );
@@ -2979,11 +3203,16 @@
                         participantsStr,
                         updateParticipants,
                         getGoogleMapLink,
+                        openTimePicker,
+                        openTimePickerFromEvent,
                         addItem,
                         removeItem,
                         removeCurrentDay,
                         addDay,
                         expenses,
+                        personalExpenses,
+                        isPersonalMode,
+                        currentExpenses,
                         newExpense,
                         totalExpense,
                         addExpense,
