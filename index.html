@@ -20,9 +20,88 @@
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
         <style>
+            :root {
+                --camp-forest: #0d1b2a;
+                --camp-forest-2: #123047;
+                --camp-deep: #0a0f1a;
+                --camp-surface: #0f172a;
+                --camp-card: #f8fafc;
+                --camp-accent: #f59e0b;
+                --camp-accent-2: #22c55e;
+                --camp-ice: #e0f2f1;
+            }
+            .camp-header {
+                background: linear-gradient(135deg, var(--camp-forest), var(--camp-forest-2));
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+            }
+            .camp-title {
+                color: #f1f5f9;
+                text-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+            }
+            .camp-day {
+                background: rgba(255, 255, 255, 0.05);
+                color: #e2e8f0;
+                border-color: rgba(255, 255, 255, 0.07);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            }
+            .camp-day-active {
+                background: linear-gradient(145deg, var(--camp-accent), #facc15);
+                color: #0f172a;
+                border-color: rgba(255, 255, 255, 0.9);
+                box-shadow: 0 14px 28px rgba(245, 158, 11, 0.25);
+            }
+            .camp-day-inactive:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #f8fafc;
+            }
+            .camp-day-add {
+                border-color: rgba(255, 255, 255, 0.28);
+                color: rgba(255, 255, 255, 0.78);
+            }
+            .camp-day-add:hover {
+                border-color: var(--camp-accent);
+                color: #fff;
+                background: rgba(245, 158, 11, 0.18);
+            }
+            .camp-chip {
+                background: rgba(255, 255, 255, 0.08);
+                color: #cbd5e1;
+                border-color: rgba(255, 255, 255, 0.12);
+            }
+            .camp-chip span {
+                color: #e2e8f0;
+            }
+            .camp-toggle {
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            }
+            .camp-toggle-btn {
+                color: #cbd5e1;
+            }
+            .camp-toggle-btn-active {
+                background: linear-gradient(135deg, var(--camp-accent), #fbbf24);
+                color: #0f172a !important;
+                box-shadow: 0 10px 22px rgba(245, 158, 11, 0.28);
+            }
+            .plan-surface {
+                background: linear-gradient(180deg, #666666 0%, #888888 100%);
+            }
+            html,
             body {
                 font-family: 'Noto Sans TC', 'Noto Sans JP', sans-serif;
-                background-color: #f3f4f6;
+                background: linear-gradient(180deg, #0b1723, #0e1f30 40%, #0f172a 100%);
+                margin: 0;
+                min-height: 100vh;
+            }
+            .main-surface {
+                background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(15, 23, 42, 0.15));
+            }
+            /* 移除容器外框白邊 */
+            #app {
+                border: none !important;
+                background: transparent;
             }
             .hide-scroll::-webkit-scrollbar {
                 display: none;
@@ -132,7 +211,7 @@
             class="flex flex-col h-full max-w-md mx-auto w-full bg-white shadow-2xl relative sm:rounded-xl sm:my-4 sm:h-[95vh] sm:border-4 sm:border-slate-100"
         >
             <!-- Header -->
-            <header class="bg-teal-600 text-white shrink-0 z-20 shadow-md">
+            <header class="camp-header text-white shrink-0 z-20 shadow-md">
                 <div class="p-4 flex justify-between items-center">
                     <div class="flex items-center gap-3">
                         <!-- 側邊欄選單按鈕 -->
@@ -141,47 +220,47 @@
                         </button>
                         <div class="overflow-hidden flex-1">
                             <h1 class="text-xl font-bold tracking-wide flex items-center gap-2 truncate">
-                                <span v-if="!isEditingDestination" class="flex items-center gap-2 truncate min-w-0">
-                                    <span class="destination-text" ref="destinationTextRef"
-                                        >{{ setup.destination || '旅遊計畫' }}</span
+                                <span v-if="!isEditingTitle" class="flex items-center gap-2 truncate min-w-0">
+                                    <span class="destination-text camp-title" ref="titleTextRef"
+                                        >{{ setup.title || '旅遊計畫' }}</span
                                     >
                                     <button
-                                        @click="startEditDestination"
+                                        @click="startEditTitle"
                                         class="w-5 h-5 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
-                                        title="編輯目的地"
+                                        title="編輯標題"
                                     >
                                         <i class="ph-bold ph-pencil-simple text-xs"></i>
                                     </button>
                                 </span>
                                 <div v-else class="flex items-center gap-2 flex-1 min-w-0">
                                     <input
-                                        v-model="editingDestinationValue"
-                                        @blur="saveDestination"
-                                        @keyup.enter="saveDestination"
-                                        @keyup.esc="cancelEditDestination"
+                                        v-model="editingTitleValue"
+                                        @blur="saveTitle"
+                                        @keyup.enter="saveTitle"
+                                        @keyup.esc="cancelEditTitle"
                                         class="flex-1 bg-teal-700 text-white border border-teal-500 rounded px-2 py-1 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-white/50 min-w-0"
-                                        placeholder="輸入目的地"
-                                        ref="destinationInputRef"
+                                        placeholder="輸入旅遊標題"
+                                        ref="titleInputRef"
                                     />
                                     <button
-                                        @click="saveDestination"
+                                        @click="saveTitle"
                                         class="w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
                                         title="儲存"
                                     >
                                         <i class="ph-bold ph-check text-sm"></i>
                                     </button>
                                     <button
-                                        @click="cancelEditDestination"
+                                        @click="cancelEditTitle"
                                         class="w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
                                         title="取消"
                                     >
                                         <i class="ph-bold ph-x text-sm"></i>
                                     </button>
                                 </div>
-                                <i v-if="!isEditingDestination" class="ph-fill ph-airplane-tilt text-sm opacity-70"></i>
+                                <i v-if="!isEditingTitle" class="ph-fill ph-airplane-tilt text-sm opacity-70"></i>
                                 <!-- 複製邀請碼按鈕（僅雲端旅程顯示） -->
                                 <button
-                                    v-if="isCloudTrip && inviteCode && !isEditingDestination"
+                                    v-if="isCloudTrip && inviteCode && !isEditingTitle"
                                     @click="copyInviteCode"
                                     class="ml-1 w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
                                     title="複製邀請碼"
@@ -189,39 +268,80 @@
                                     <i class="ph-bold ph-copy text-sm"></i>
                                 </button>
                             </h1>
+                            <!-- 國家/地點編輯（移至標題下方） -->
+                            <div class="flex items-center gap-2 text-xs text-teal-50 mt-1">
+                                <i class="ph-bold ph-map-pin text-[11px] opacity-70"></i>
+                                <div class="flex-1 min-w-0">
+                                    <span v-if="!isEditingDestination" class="inline-flex items-center gap-2">
+                                        <span class="truncate">{{ setup.destination || '輸入國家 / 地點' }}</span>
+                                        <button
+                                            @click="startEditDestination"
+                                            class="w-5 h-5 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
+                                            title="編輯國家/地點"
+                                        >
+                                            <i class="ph-bold ph-pencil-simple text-[10px]"></i>
+                                        </button>
+                                    </span>
+                                    <div v-else class="flex items-center gap-2">
+                                        <input
+                                            v-model="editingDestinationValue"
+                                            @blur="saveDestination"
+                                            @keyup.enter="saveDestination"
+                                            @keyup.esc="cancelEditDestination"
+                                            class="flex-1 bg-white/10 text-white border border-white/30 rounded px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-white/50 min-w-0"
+                                            placeholder="輸入國家 / 地點（用於天氣、匯率、語言）"
+                                            ref="destinationInputRef"
+                                        />
+                                        <button
+                                            @click="saveDestination"
+                                            class="w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
+                                            title="儲存"
+                                        >
+                                            <i class="ph-bold ph-check text-[11px]"></i>
+                                        </button>
+                                        <button
+                                            @click="cancelEditDestination"
+                                            class="w-6 h-6 flex items-center justify-center text-teal-100 hover:text-white hover:bg-white/20 rounded transition-all cursor-pointer shrink-0"
+                                            title="取消"
+                                        >
+                                            <i class="ph-bold ph-x text-[11px]"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             <!-- <p class="text-xs text-teal-100 mt-0.5 font-light tracking-wider truncate">
                                 點擊下方日期切換行程
                             </p> -->
                         </div>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
-                        <div class="flex bg-teal-800/50 p-1 rounded-lg">
+                        <div class="flex camp-toggle p-1 rounded-xl">
                             <button
                                 @click="viewMode = 'plan'"
-                                :class="viewMode === 'plan' ? 'bg-white text-teal-700 shadow-sm' : 'text-teal-200'"
-                                class="p-2 rounded-md transition-all"
+                                :class="viewMode === 'plan' ? 'camp-toggle-btn-active' : 'camp-toggle-btn'"
+                                class="p-2 rounded-lg transition-all"
                             >
                                 <i class="ph-bold ph-calendar-check text-lg"></i>
                             </button>
                             <button
                                 @click="viewMode = 'map'"
-                                :class="viewMode === 'map' ? 'bg-white text-teal-700 shadow-sm' : 'text-teal-200'"
-                                class="p-2 rounded-md transition-all"
+                                :class="viewMode === 'map' ? 'camp-toggle-btn-active' : 'camp-toggle-btn'"
+                                class="p-2 rounded-lg transition-all"
                             >
                                 <i class="ph-bold ph-map-trifold text-lg"></i>
                             </button>
                             <button
                                 @click="viewMode = 'money'"
-                                :class="viewMode === 'money' ? 'bg-white text-teal-700 shadow-sm' : 'text-teal-200'"
-                                class="p-2 rounded-md transition-all"
+                                :class="viewMode === 'money' ? 'camp-toggle-btn-active' : 'camp-toggle-btn'"
+                                class="p-2 rounded-lg transition-all"
                             >
                                 <i class="ph-bold ph-currency-dollar text-lg"></i>
                             </button>
                             <!-- 翻譯功能按鈕 -->
                             <button
                                 @click="viewMode = 'translate'"
-                                :class="viewMode === 'translate' ? 'bg-white text-teal-700 shadow-sm' : 'text-teal-200'"
-                                class="p-2 rounded-md transition-all"
+                                :class="viewMode === 'translate' ? 'camp-toggle-btn-active' : 'camp-toggle-btn'"
+                                class="p-2 rounded-lg transition-all"
                             >
                                 <i class="ph-bold ph-translate text-xl"></i>
                             </button>
@@ -233,15 +353,15 @@
                         v-for="(day, index) in days"
                         :key="index"
                         @click="currentDayIdx = index"
-                        class="snap-center shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl cursor-pointer transition-all border-2"
-                        :class="currentDayIdx === index ? 'bg-white text-teal-600 border-white shadow-lg scale-105' : 'bg-teal-500/50 text-teal-100 border-transparent hover:bg-teal-500'"
+                        class="snap-center shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl cursor-pointer transition-all border-2 camp-day"
+                        :class="currentDayIdx === index ? 'camp-day-active scale-105' : 'camp-day-inactive'"
                     >
                         <span class="text-xs font-medium opacity-80">{{ day.shortDate }}</span>
                         <span class="text-lg font-bold">D{{ index }}</span>
                     </div>
                     <button
                         @click="addDay"
-                        class="shrink-0 w-12 h-16 rounded-xl flex items-center justify-center border-2 border-teal-400 border-dashed text-teal-200 hover:text-white hover:border-white transition"
+                        class="shrink-0 w-12 h-16 rounded-xl flex items-center justify-center border-2 border-dashed camp-day-add transition"
                     >
                         <i class="ph-bold ph-plus"></i>
                     </button>
@@ -249,10 +369,10 @@
             </header>
 
             <!-- Main Content -->
-            <main class="flex-1 overflow-y-auto bg-slate-50 relative hide-scroll">
+            <main class="flex-1 overflow-y-auto relative hide-scroll main-surface">
                 <!-- 行程表 (Plan View) -->
                 <transition name="fade" mode="out-in">
-                    <div v-if="viewMode === 'plan'" :key="currentDayIdx" class="p-4 pb-24">
+                    <div v-if="viewMode === 'plan'" :key="currentDayIdx" class="p-4 pb-24 plan-surface">
                         <div
                             class="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-slate-100 flex justify-between items-start"
                         >
@@ -307,10 +427,12 @@
                                 class="relative bg-gradient-to-r from-blue-600 to-teal-500 rounded-2xl text-white shadow-lg overflow-hidden"
                             >
                                 <div
-                                    class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-slate-50 rounded-full z-10"
+                                    class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full z-10"
+                                    style="background: #666666"
                                 ></div>
                                 <div
-                                    class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-slate-50 rounded-full z-10"
+                                    class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full z-10"
+                                    style="background: #666666"
                                 ></div>
                                 <div class="p-4 relative z-0">
                                     <button
@@ -563,7 +685,7 @@
                 </div>
 
                 <!-- 分帳視圖 -->
-                <div v-if="viewMode === 'money'" class="p-4 pb-24">
+                <div v-if="viewMode === 'money'" class="p-4 pb-24 plan-surface">
                     <div class="bg-teal-600 text-white rounded-2xl p-6 shadow-lg mb-6 text-center relative">
                         <div class="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
                             <!-- 個人/多人記帳切換按鈕 -->
@@ -784,7 +906,10 @@
                 </div>
 
                 <!-- 翻譯功能 -->
-                <div v-if="viewMode === 'translate'" class="p-6 h-full flex flex-col justify-center items-center pb-32">
+                <div
+                    v-if="viewMode === 'translate'"
+                    class="p-6 h-full flex flex-col justify-center items-center pb-32 plan-surface"
+                >
                     <div class="text-center mb-8">
                         <h2 class="text-2xl font-bold text-slate-800 mb-2">Google 翻譯捷徑</h2>
                         <p class="text-sm text-slate-400">請選擇您需要的翻譯模式</p>
@@ -981,7 +1106,18 @@
                     </div>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">目的地 (英文/中文)</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">旅遊標題</label>
+                            <input
+                                v-model="setup.title"
+                                type="text"
+                                placeholder="例如: 日本東京自由行"
+                                class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:ring-2 focus:ring-teal-500 font-bold"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1 ml-1"
+                                >國家/地點 (用於天氣、匯率、語言)</label
+                            >
                             <div class="relative">
                                 <input
                                     v-model="setup.destination"
@@ -1307,7 +1443,8 @@
                     const userLocation = ref(null);
                     const weather = ref({ temp: null, icon: 'ph-sun', code: 0, location: '', daily: [] });
                     const setup = ref({
-                        destination: 'Tokyo',
+                        title: '旅遊計畫', // 使用者自定義的旅遊標題（UI 顯示用）
+                        destination: 'Tokyo', // 國家/地點（用於天氣、匯率、語言等功能）
                         startDate: new Date().toISOString().split('T')[0],
                         days: 5,
                         rate: 0.215,
@@ -1328,11 +1465,15 @@
                     const isUploading = ref(false);
                     const isSyncing = ref(false);
 
-                    // 編輯 destination 相關
+                    // 編輯 title 相關（旅遊標題）
+                    const isEditingTitle = ref(false);
+                    const editingTitleValue = ref('');
+                    const titleInputRef = ref(null);
+                    const titleTextRef = ref(null);
+                    // 編輯 destination（國家/地點）
                     const isEditingDestination = ref(false);
                     const editingDestinationValue = ref('');
                     const destinationInputRef = ref(null);
-                    const destinationTextRef = ref(null);
 
                     // --- Computed ---
                     const currentDay = computed(
@@ -1549,52 +1690,46 @@
                         Object.assign(day, formatted);
                     };
 
-                    // 編輯 destination 相關函數
-                    const startEditDestination = () => {
-                        editingDestinationValue.value = setup.value.destination || '';
-                        isEditingDestination.value = true;
+                    // 編輯 title 相關函數（旅遊標題）
+                    const startEditTitle = () => {
+                        editingTitleValue.value = setup.value.title || '';
+                        isEditingTitle.value = true;
                         nextTick(() => {
-                            if (destinationInputRef.value) {
-                                destinationInputRef.value.focus();
-                                destinationInputRef.value.select();
+                            if (titleInputRef.value) {
+                                titleInputRef.value.focus();
+                                titleInputRef.value.select();
                             }
                         });
                     };
-                    const saveDestination = async () => {
-                        const newDestination = editingDestinationValue.value.trim();
-                        if (newDestination) {
-                            const oldDestination = setup.value.destination;
-                            setup.value.destination = newDestination;
+                    const saveTitle = async () => {
+                        const newTitle = editingTitleValue.value.trim();
+                        if (newTitle) {
+                            setup.value.title = newTitle;
                             // 自動儲存到 localStorage
                             if (currentTripId.value) {
                                 saveToStorage(currentTripId.value, 'config', setup.value);
-                                // 更新 tripList 中的 destination
+                                // 更新 tripList 中的 title（如果有的話，否則使用 destination）
                                 const trip = tripList.value.find((t) => t.id === currentTripId.value);
                                 if (trip) {
-                                    trip.destination = newDestination;
+                                    trip.destination = newTitle; // tripList 仍使用 destination 欄位顯示標題
                                     saveTripList();
                                 }
                             }
-                            // 如果目的地改變，重新抓取天氣和匯率
-                            if (newDestination !== oldDestination) {
-                                await detectRate();
-                                await fetchWeather(newDestination);
-                            }
                             // 調整字體大小
-                            adjustDestinationFontSize();
+                            adjustTitleFontSize();
                         }
-                        isEditingDestination.value = false;
+                        isEditingTitle.value = false;
                     };
-                    const cancelEditDestination = () => {
-                        isEditingDestination.value = false;
-                        editingDestinationValue.value = '';
+                    const cancelEditTitle = () => {
+                        isEditingTitle.value = false;
+                        editingTitleValue.value = '';
                     };
 
-                    // 自動調整 destination 文字大小
-                    const adjustDestinationFontSize = () => {
+                    // 自動調整 title 文字大小
+                    const adjustTitleFontSize = () => {
                         nextTick(() => {
-                            if (!destinationTextRef.value) return;
-                            const element = destinationTextRef.value;
+                            if (!titleTextRef.value) return;
+                            const element = titleTextRef.value;
 
                             // 設定最大寬度（200px，小螢幕 150px）
                             const maxWidth = window.innerWidth <= 400 ? 100 : 140;
@@ -1615,6 +1750,39 @@
                                 element.style.fontSize = '1.25rem';
                             }
                         });
+                    };
+
+                    // 編輯 destination（國家/地點）相關函數
+                    const startEditDestination = () => {
+                        editingDestinationValue.value = setup.value.destination || '';
+                        isEditingDestination.value = true;
+                        nextTick(() => {
+                            if (destinationInputRef.value) {
+                                destinationInputRef.value.focus();
+                                destinationInputRef.value.select();
+                            }
+                        });
+                    };
+                    const saveDestination = async () => {
+                        const newDestination = editingDestinationValue.value.trim();
+                        if (newDestination) {
+                            const oldDestination = setup.value.destination;
+                            setup.value.destination = newDestination;
+                            // 自動儲存到 localStorage
+                            if (currentTripId.value) {
+                                saveToStorage(currentTripId.value, 'config', setup.value);
+                            }
+                            // 若目的地改變，重新抓取匯率 / 天氣
+                            if (newDestination !== oldDestination) {
+                                await detectRate();
+                                await fetchWeather(newDestination);
+                            }
+                        }
+                        isEditingDestination.value = false;
+                    };
+                    const cancelEditDestination = () => {
+                        isEditingDestination.value = false;
+                        editingDestinationValue.value = '';
                     };
 
                     // --- Core ---
@@ -1947,6 +2115,7 @@
                             localStorage.setItem(getStorageKey(JP_TRIP_ID, 'users'), DEFAULT_PARTICIPANTS_STR);
                             localStorage.setItem(getStorageKey(JP_TRIP_ID, 'rate'), String(DEFAULT_EXCHANGE_RATE));
                             saveToStorage(JP_TRIP_ID, 'config', {
+                                title: '日本東京富士山',
                                 destination: 'Japan',
                                 startDate: '2025-02-17',
                                 days: 7,
@@ -1963,6 +2132,7 @@
                     };
                     const createNewTrip = () => {
                         setup.value = {
+                            title: '',
                             destination: '',
                             startDate: getTodayDateStr(),
                             days: 5,
@@ -1976,13 +2146,17 @@
                     };
                     const initTrip = () => {
                         if (!setup.value.destination) {
-                            alert('請輸入目的地');
+                            alert('請輸入國家/地點');
                             return;
+                        }
+                        // 如果沒有輸入標題，使用 destination 作為預設標題
+                        if (!setup.value.title) {
+                            setup.value.title = setup.value.destination;
                         }
                         const newId = generateId();
                         const newTripMeta = {
                             id: newId,
-                            destination: setup.value.destination,
+                            destination: setup.value.title || setup.value.destination, // tripList 使用 title，沒有則用 destination
                             startDate: setup.value.startDate,
                             daysCount: setup.value.days,
                         };
@@ -2077,6 +2251,7 @@
                             localStorage.setItem(getStorageKey(JP_TRIP_ID, 'users'), DEFAULT_PARTICIPANTS_STR);
                             localStorage.setItem(getStorageKey(JP_TRIP_ID, 'rate'), String(DEFAULT_EXCHANGE_RATE));
                             saveToStorage(JP_TRIP_ID, 'config', {
+                                title: '日本東京富士山',
                                 destination: 'Japan',
                                 startDate: JP_TRIP_DATA[0]?.fullDate || '2025-02-17',
                                 days: JP_TRIP_DATA.length,
@@ -2994,11 +3169,13 @@
 
                                 // 更新 trips 主文件（完全覆蓋，不使用 merge）
                                 await setDoc(doc(firestoreDb, 'trips', tripId), {
-                                    destination: setup.value.destination,
+                                    title: setup.value.title || '', // 明確保存標題（旅遊標題）
+                                    destination: setup.value.destination || '', // 明確保存國家/地點
                                     startDate: setup.value.startDate,
                                     daysCount: days.value.length,
                                     inviteCode: inviteCodeToUse,
                                     participants: participantsStr.value, // 保存分帳成員
+                                    // config 僅保存功能性設定，避免混入 title/destination
                                     config: {
                                         currency: setup.value.currency,
                                         rate: setup.value.rate,
@@ -3055,11 +3232,13 @@
                                 // 第一次上傳，建立新文件
                                 inviteCodeToUse = generateInviteCode();
                                 const tripRef = await addDoc(collection(firestoreDb, 'trips'), {
-                                    destination: setup.value.destination,
+                                    title: setup.value.title || '', // 明確保存標題（旅遊標題）
+                                    destination: setup.value.destination || '', // 明確保存國家/地點
                                     startDate: setup.value.startDate,
                                     daysCount: days.value.length,
                                     inviteCode: inviteCodeToUse,
                                     participants: participantsStr.value, // 保存分帳成員
+                                    // config 僅保存功能性設定，避免混入 title/destination
                                     config: {
                                         currency: setup.value.currency,
                                         rate: setup.value.rate,
@@ -3248,19 +3427,35 @@
                                 const tripData = tripDoc.data();
                                 console.log('📋 Trip 完整資料:', tripData);
 
-                                // 優先同步 destination（讓 UI 可以立即更新）
+                                // 優先同步 title 和 destination（讓 UI 可以立即更新）
+                                // 同步 title（旅遊標題）- 優先使用根層級，其次 config
+                                const syncedTitle = tripData.title || (tripData.config && tripData.config.title) || '';
+                                if (syncedTitle) {
+                                    setup.value.title = syncedTitle;
+                                    console.log('✅ Title 已更新（優先同步）:', syncedTitle);
+                                } else {
+                                    // 如果沒有 title，使用 destination 作為 fallback（向後兼容）
+                                    const fallbackTitle =
+                                        tripData.destination || (tripData.config && tripData.config.destination) || '';
+                                    if (fallbackTitle) {
+                                        setup.value.title = fallbackTitle;
+                                        console.log('⚠️ Title 不存在，使用 destination 作為 fallback:', fallbackTitle);
+                                    }
+                                }
+
+                                // 同步 destination（國家/地點）- 優先使用根層級，其次 config
                                 const syncedDestination =
-                                    tripData.destination || (tripData.config && tripData.config.destination);
+                                    tripData.destination || (tripData.config && tripData.config.destination) || '';
                                 if (syncedDestination) {
                                     setup.value.destination = syncedDestination;
                                     console.log('✅ Destination 已更新（優先同步）:', syncedDestination);
+                                }
 
-                                    // 更新 tripList 中的 destination
-                                    const trip = tripList.value.find((t) => t.id === currentTripId.value);
-                                    if (trip) {
-                                        trip.destination = syncedDestination;
-                                        saveTripList();
-                                    }
+                                // 更新 tripList 中的顯示（使用 title，沒有則用 destination）
+                                const trip = tripList.value.find((t) => t.id === currentTripId.value);
+                                if (trip) {
+                                    trip.destination = setup.value.title || setup.value.destination || trip.destination;
+                                    saveTripList();
                                 }
                             }
 
@@ -3340,19 +3535,26 @@
                             if (tripDoc.exists()) {
                                 const tripData = tripDoc.data();
 
-                                // 同步 config 中的其他設定（但不覆蓋已同步的 destination）
+                                // 同步 config 中的其他設定（但不覆蓋已同步的 title 和 destination）
                                 if (tripData.config) {
-                                    const currentDestination = setup.value.destination; // 保存已同步的 destination
+                                    const currentTitle = setup.value.title || ''; // 保存已同步的 title
+                                    const currentDestination = setup.value.destination || ''; // 保存已同步的 destination
                                     setup.value = {
                                         ...setup.value,
                                         ...tripData.config,
-                                        destination: currentDestination, // 確保使用根層級的 destination
+                                        // 確保使用已同步的 title 和 destination（優先使用根層級的值）
+                                        title: currentTitle || tripData.config.title || '',
+                                        destination: currentDestination || tripData.config.destination || '',
                                     };
                                     // 從 config 更新 exchangeRate
                                     if (tripData.config.rate !== undefined) {
                                         exchangeRate.value = tripData.config.rate;
                                     }
-                                    console.log('✅ 設定資料已更新:', setup.value);
+                                    console.log('✅ 設定資料已更新:', {
+                                        title: setup.value.title,
+                                        destination: setup.value.destination,
+                                        currency: setup.value.currency,
+                                    });
                                 }
 
                                 if (tripData.inviteCode) {
@@ -3426,7 +3628,8 @@
                                     sample: expenses.value[0] || null,
                                 },
                                 config: {
-                                    hasConfig: !!setup.value.destination,
+                                    hasConfig: !!(setup.value.title || setup.value.destination),
+                                    title: setup.value.title,
                                     destination: setup.value.destination,
                                     currency: setup.value.currency,
                                 },
@@ -3669,7 +3872,7 @@
                                 const newLocalId = generateId();
                                 const newTripMeta = {
                                     id: newLocalId,
-                                    destination: tripData.destination || '雲端旅程',
+                                    destination: tripData.title || tripData.destination || '雲端旅程', // tripList 使用 title，沒有則用 destination
                                     startDate: tripData.startDate || new Date().toISOString().split('T')[0],
                                     daysCount: tripData.daysCount || 0,
                                     isCloudTrip: true,
@@ -3693,7 +3896,24 @@
                                     getStorageKey(newLocalId, 'rate'),
                                     (tripData.config?.rate || DEFAULT_EXCHANGE_RATE).toString()
                                 );
-                                saveToStorage(newLocalId, 'config', tripData.config || {});
+                                // 確保 config 包含 title 和 destination（明確分離）
+                                // 優先使用根層級的值，其次 config 中的值
+                                const syncedTitle =
+                                    tripData.title ||
+                                    (tripData.config && tripData.config.title) ||
+                                    tripData.destination ||
+                                    '雲端旅程';
+                                const syncedDestination =
+                                    tripData.destination || (tripData.config && tripData.config.destination) || 'Tokyo';
+                                const defaultConfig = {
+                                    title: syncedTitle,
+                                    destination: syncedDestination,
+                                    ...tripData.config,
+                                    // 確保覆蓋 config 中的 title 和 destination（使用根層級的值）
+                                    title: syncedTitle,
+                                    destination: syncedDestination,
+                                };
+                                saveToStorage(newLocalId, 'config', defaultConfig);
 
                                 tripList.value.unshift(newTripMeta);
                                 saveTripList();
@@ -3779,11 +3999,21 @@
                             if (!val) resetNewExpenseSplits();
                         });
 
-                        // 監聽 destination 變化並調整字體大小
+                        // 監聽 title 變化並調整字體大小
+                        watch(
+                            () => setup.value.title,
+                            () => {
+                                adjustTitleFontSize();
+                            }
+                        );
+                        // 監聽 destination 變化（更新匯率與天氣，並確保後續功能使用最新值）
                         watch(
                             () => setup.value.destination,
-                            () => {
-                                adjustDestinationFontSize();
+                            (val, oldVal) => {
+                                if (val && val !== oldVal) {
+                                    detectRate();
+                                    fetchWeather(val);
+                                }
                             }
                         );
 
@@ -3791,7 +4021,7 @@
                         window.addEventListener('resize', adjustDestinationFontSize);
 
                         // 初始調整字體大小
-                        adjustDestinationFontSize();
+                        adjustTitleFontSize();
 
                         if (!isPersonalMode.value) {
                             resetNewExpenseSplits();
@@ -3979,15 +4209,22 @@
                         copyInviteLink,
                         copyInviteCode,
                         testFirebaseConnection, // 測試函數（可在控制台調用）
+                        // 編輯 title 功能
+                        isEditingTitle,
+                        editingTitleValue,
+                        titleInputRef,
+                        titleTextRef,
+                        startEditTitle,
+                        saveTitle,
+                        cancelEditTitle,
+                        adjustTitleFontSize,
                         // 編輯 destination 功能
                         isEditingDestination,
                         editingDestinationValue,
                         destinationInputRef,
-                        destinationTextRef,
                         startEditDestination,
                         saveDestination,
                         cancelEditDestination,
-                        adjustDestinationFontSize,
                     };
                 },
             }).mount('#app');
