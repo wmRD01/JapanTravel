@@ -611,9 +611,47 @@
                             :key="p"
                             class="bg-white p-3 rounded-xl border border-slate-100 text-center shadow-sm"
                         >
-                            <div class="text-xs text-slate-400 mb-1">{{ p }} 墊付</div>
-                            <div class="text-sm font-bold text-teal-600">
+                            <div class="text-xs text-slate-400 mb-1">{{ p }}</div>
+                            <!-- 墊付金額 -->
+                            <div class="text-xs text-slate-500 mb-0.5">墊付</div>
+                            <div class="text-sm font-bold text-teal-600 mb-1">
                                 {{ currencySymbol }}{{ paidByPerson[p]?.toLocaleString() || 0 }}
+                            </div>
+                            <!-- 應付金額 -->
+                            <div class="text-xs text-slate-500 mb-0.5">應付</div>
+                            <div class="text-sm font-bold text-slate-600 mb-1">
+                                {{ currencySymbol }}{{ Math.round(owedByPerson[p] || 0).toLocaleString() }}
+                            </div>
+                            <!-- 淨額（墊付 - 應付） -->
+                            <div class="border-t border-slate-200 pt-1 mt-1">
+                                <div class="text-[10px] text-slate-400 mb-0.5">淨額</div>
+                                <div
+                                    :class="
+                                        (paidByPerson[p] || 0) - (owedByPerson[p] || 0) > 0
+                                            ? 'text-red-600 font-bold'
+                                            : (paidByPerson[p] || 0) - (owedByPerson[p] || 0) < 0
+                                            ? 'text-teal-600 font-bold'
+                                            : 'text-slate-500 font-bold'
+                                    "
+                                    class="text-sm"
+                                >
+                                    {{ (paidByPerson[p] || 0) - (owedByPerson[p] || 0) > 0 ? '+' : (paidByPerson[p] ||
+                                    0) - (owedByPerson[p] || 0) < 0 ? '' : '' }}{{ currencySymbol }}{{ Math.abs(
+                                    Math.round((paidByPerson[p] || 0) - (owedByPerson[p] || 0)) ).toLocaleString() }}
+                                </div>
+                                <div
+                                    v-if="(paidByPerson[p] || 0) - (owedByPerson[p] || 0) > 0"
+                                    class="text-[9px] text-red-500 mt-0.5"
+                                >
+                                    應收
+                                </div>
+                                <div
+                                    v-else-if="(paidByPerson[p] || 0) - (owedByPerson[p] || 0) < 0"
+                                    class="text-[9px] text-teal-500 mt-0.5"
+                                >
+                                    應付
+                                </div>
+                                <div v-else class="text-[9px] text-slate-400 mt-0.5">已結清</div>
                             </div>
                         </div>
                     </div>
@@ -668,11 +706,40 @@
                                 class="w-full bg-slate-50 border-none rounded-lg text-sm pl-3 pr-3 py-2 font-mono"
                             />
                             <button
+                                v-if="!isPersonalMode"
+                                @click="selectAllSplits"
+                                class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg text-xs font-bold border border-slate-200"
+                                title="全選分攤成員"
+                            >
+                                全選
+                            </button>
+                            <button
                                 @click="addExpense"
                                 class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-bold"
                             >
                                 <i class="ph-bold ph-plus"></i>
                             </button>
+                        </div>
+                        <div v-if="!isPersonalMode" class="bg-slate-50 rounded-lg border border-slate-200 p-3 mt-2">
+                            <div class="text-[11px] text-slate-500 font-bold mb-2">分攤成員</div>
+                            <div class="flex flex-wrap gap-2">
+                                <label
+                                    v-for="p in participants"
+                                    :key="p"
+                                    class="flex items-center gap-1 bg-white border border-slate-200 rounded-full px-3 py-1 text-xs text-slate-700 shadow-sm"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        v-model="newExpense.splitParticipants"
+                                        :value="p"
+                                        class="accent-teal-600"
+                                    />
+                                    {{ p }}
+                                </label>
+                            </div>
+                            <div v-if="newExpense.splitParticipants.length === 0" class="text-[10px] text-red-500 mt-2">
+                                若未選擇，將自動使用全體成員分攤
+                            </div>
                         </div>
                     </div>
                     <div class="space-y-3">
@@ -694,7 +761,15 @@
                                 >
                                     <i class="ph-bold ph-user"></i>
                                 </div>
-                                <div><div class="font-bold text-slate-700 text-sm">{{ exp.item }}</div></div>
+                                <div>
+                                    <div class="font-bold text-slate-700 text-sm">{{ exp.item }}</div>
+                                    <div
+                                        v-if="!isPersonalMode && exp.splitParticipants && exp.splitParticipants.length > 0"
+                                        class="text-[11px] text-slate-400 mt-0.5"
+                                    >
+                                        分攤：{{ exp.splitParticipants.join('、') }}
+                                    </div>
+                                </div>
                             </div>
                             <div class="flex items-center gap-3">
                                 <span class="font-mono font-bold text-slate-700"
@@ -1214,8 +1289,17 @@
                     const participants = ref([...DEFAULT_PARTICIPANTS]);
                     const participantsStr = ref(DEFAULT_PARTICIPANTS_STR);
                     const exchangeRate = ref(DEFAULT_EXCHANGE_RATE);
-                    const newExpense = ref({ item: '', amount: '', payer: '我', time: '' });
+                    const newExpense = ref({ item: '', amount: '', payer: '我', time: '', splitParticipants: [] });
                     const timeInputRefs = ref({}); // 時間輸入框的 ref 引用
+
+                    // 預設分攤成員（多人模式使用）
+                    const resetNewExpenseSplits = () => {
+                        newExpense.value.splitParticipants = [...participants.value];
+                    };
+
+                    const selectAllSplits = () => {
+                        resetNewExpenseSplits();
+                    };
 
                     // 暫存與設定
                     const isRateLoading = ref(false);
@@ -1270,13 +1354,33 @@
                         });
                         return map;
                     });
+
+                    // 每人應分攤的金額（只計多人模式）
+                    const owedByPerson = computed(() => {
+                        const map = {};
+                        participants.value.forEach((p) => (map[p] = 0));
+                        if (isPersonalMode.value) return map;
+                        expenses.value.forEach((e) => {
+                            const splits =
+                                e.splitParticipants && e.splitParticipants.length > 0
+                                    ? e.splitParticipants
+                                    : participants.value;
+                            if (splits.length === 0) return;
+                            const share = e.amount / splits.length;
+                            splits.forEach((p) => {
+                                if (map[p] === undefined) map[p] = 0;
+                                map[p] += share;
+                            });
+                        });
+                        return map;
+                    });
                     const settlementPlan = computed(() => {
                         if (isPersonalMode.value) return []; // 個人記帳不顯示結帳建議
                         if (totalExpense.value === 0) return [];
-                        const average = totalExpense.value / participants.value.length;
+                        // 改為「實際支付 - 應分攤」的差額
                         let balances = participants.value.map((p) => ({
                             name: p,
-                            val: (paidByPerson.value[p] || 0) - average,
+                            val: (paidByPerson.value[p] || 0) - (owedByPerson.value[p] || 0),
                         }));
                         let debtors = balances.filter((b) => b.val < -1).sort((a, b) => a.val - b.val);
                         let creditors = balances.filter((b) => b.val > 1).sort((a, b) => b.val - a.val);
@@ -1350,6 +1454,33 @@
                     const getTodayDateStr = () => new Date().toISOString().split('T')[0];
                     const generateId = () =>
                         'trip_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                    // 計算每筆支出中每人應付的金額
+                    const getExpenseSplitAmount = (expense) => {
+                        if (isPersonalMode.value) return [];
+                        const splits =
+                            expense.splitParticipants && expense.splitParticipants.length > 0
+                                ? expense.splitParticipants
+                                : participants.value;
+                        if (splits.length === 0) return [];
+                        const sharePerPerson = expense.amount / splits.length;
+                        const result = [];
+                        splits.forEach((person) => {
+                            if (person === expense.payer) {
+                                // 付款人：墊付金額 - 應付金額 = 應收金額（負數表示應收）
+                                result.push({
+                                    person: person,
+                                    amount: expense.amount - sharePerPerson,
+                                });
+                            } else {
+                                // 非付款人：應付金額（正數表示應付）
+                                result.push({
+                                    person: person,
+                                    amount: sharePerPerson,
+                                });
+                            }
+                        });
+                        return result;
+                    };
                     const getWeatherIcon = (c) => {
                         if (c === 0) return 'ph-sun';
                         if (c < 4) return 'ph-cloud-sun';
@@ -1402,6 +1533,13 @@
                             .split(',')
                             .map((s) => s.trim())
                             .filter((s) => s);
+                        if (!isPersonalMode.value) {
+                            resetNewExpenseSplits();
+                        }
+                        // 立即保存到 localStorage（watch 會自動保存，但這裡確保立即保存）
+                        if (currentTripId.value) {
+                            localStorage.setItem(getStorageKey(currentTripId.value, 'users'), participantsStr.value);
+                        }
                     };
                     const updateDate = (e, day) => {
                         const val = e.target.value;
@@ -1580,11 +1718,21 @@
                                 itemWithTime = timePrefix + itemWithTime;
                             }
 
+                            // 確認分攤對象（若未選擇則預設全部參與者）
+                            // 重要：必須明確保存分攤成員列表，不能是空陣列，否則同步時會被誤判
+                            const selectedSplits =
+                                !isPersonalMode.value && newExpense.value.splitParticipants?.length > 0
+                                    ? newExpense.value.splitParticipants
+                                    : isPersonalMode.value
+                                    ? []
+                                    : [...participants.value]; // 明確使用全員列表，不是空陣列
+
                             const expense = {
                                 item: itemWithTime,
                                 amount: newExpense.value.amount,
                                 payer: isPersonalMode.value ? '個人' : payer,
                                 order,
+                                splitParticipants: selectedSplits, // 確保永遠有明確的值
                             };
 
                             if (isPersonalMode.value) {
@@ -1611,6 +1759,9 @@
                             // 只清空項目和金額，保留時間與付款人
                             newExpense.value.item = '';
                             newExpense.value.amount = '';
+                            if (!isPersonalMode.value) {
+                                resetNewExpenseSplits();
+                            }
                         }
                     };
                     const removeExpense = (idx) => {
@@ -1997,6 +2148,8 @@
                         }
 
                         currentTripId.value = id;
+                        // 保存當前選擇的旅程 ID 到 localStorage
+                        localStorage.setItem('last_selected_trip_id', id);
                         showTripMenu.value = false;
 
                         // 載入本地資料
@@ -2010,6 +2163,7 @@
                         const lCloud = loadFromStorage(id, 'cloud');
 
                         // 檢查是否為雲端旅程
+                        let cloudSyncSuccess = false; // 標記雲端同步是否成功
                         if (lCloud) {
                             cloudTripId.value = lCloud.cloudTripId || null;
                             inviteCode.value = lCloud.inviteCode || '';
@@ -2019,23 +2173,46 @@
 
                             // 如果是雲端旅程，自動同步資料並設定即時監聽
                             if (isCloudTrip.value && cloudTripId.value) {
-                                await syncFromCloud();
-                                await setupExpensesRealtimeListener();
+                                try {
+                                    await syncFromCloud(); // 同步會更新 participantsStr 和 setup.value
+                                    cloudSyncSuccess = true; // 標記同步成功
+                                    await setupExpensesRealtimeListener();
+                                } catch (error) {
+                                    console.error('雲端同步失敗，將使用本地資料:', error);
+                                    cloudSyncSuccess = false; // 同步失敗，使用本地資料
+                                }
+                            } else {
+                                // 如果不是雲端旅程，使用本地資料
+                                if (lUsers) {
+                                    participantsStr.value = lUsers;
+                                    updateParticipants();
+                                }
                             }
                         } else {
                             isCloudTrip.value = false;
                             cloudTripId.value = null;
                             inviteCode.value = '';
-                        }
-
-                        if (lUsers) {
-                            participantsStr.value = lUsers;
-                            updateParticipants();
+                            // 非雲端旅程，使用本地資料
+                            if (lUsers) {
+                                participantsStr.value = lUsers;
+                                updateParticipants();
+                            }
                         }
                         if (lRate) exchangeRate.value = parseFloat(lRate);
-                        if (lConf) {
+
+                        // 載入本地 config（僅在非雲端旅程，或雲端旅程同步失敗時使用）
+                        // 如果是雲端旅程且已成功同步，syncFromCloud() 已經更新了 setup.value，不需要再用本地 config 覆蓋
+                        if (lConf && !cloudSyncSuccess) {
                             setup.value = lConf;
-                            fetchWeather(lConf.destination);
+                        }
+
+                        // 統一使用 setup.value.destination 來獲取天氣（無論是本地還是雲端載入的）
+                        if (setup.value.destination) {
+                            fetchWeather(setup.value.destination);
+                        }
+
+                        if (!isPersonalMode.value) {
+                            resetNewExpenseSplits();
                         }
                     };
 
@@ -2071,6 +2248,12 @@
                             expensesUnsubscribe = onSnapshot(
                                 expensesQuery,
                                 async (snapshot) => {
+                                    // 如果是本地更新，忽略監聽器的觸發（避免上傳時清空資料）
+                                    if (isLocalUpdate) {
+                                        console.log('⚠️ 忽略監聽器觸發（本地更新中）');
+                                        return;
+                                    }
+
                                     console.log('📢 偵測到 sharedExpenses 變更:', {
                                         size: snapshot.size,
                                         changes: snapshot.docChanges().map((change) => ({
@@ -2084,11 +2267,18 @@
                                     const remoteExpenses = [];
                                     snapshot.forEach((doc) => {
                                         const data = doc.data();
+                                        // 處理舊資料：如果沒有 splitParticipants 或為空陣列，使用當前全員作為預設值
+                                        let splitParts = data.splitParticipants;
+                                        if (!splitParts || !Array.isArray(splitParts) || splitParts.length === 0) {
+                                            // 舊資料或空陣列：使用當前全員列表（這是合理的預設值）
+                                            splitParts = [...participants.value];
+                                        }
                                         remoteExpenses.push({
                                             item: data.item,
                                             amount: data.amount,
                                             payer: data.payerName,
                                             order: data.order || null, // 唯一識別用的 order
+                                            splitParticipants: splitParts, // 確保永遠有明確的值
                                         });
                                     });
 
@@ -2113,12 +2303,21 @@
                     // - 兩邊都有 -> 本地覆寫為 Firestore 的內容
                     const mergeExpenses = (remoteExpenses) => {
                         // 先將遠端資料轉成本地格式（包含 order）
-                        const remoteFormatted = remoteExpenses.map((exp) => ({
-                            item: exp.item,
-                            amount: exp.amount,
-                            payer: exp.payer,
-                            order: exp.order || null,
-                        }));
+                        const remoteFormatted = remoteExpenses.map((exp) => {
+                            // 處理舊資料：如果沒有 splitParticipants 或為空陣列，使用當前全員作為預設值
+                            let splitParts = exp.splitParticipants;
+                            if (!splitParts || !Array.isArray(splitParts) || splitParts.length === 0) {
+                                // 舊資料或空陣列：使用當前全員列表（這是合理的預設值）
+                                splitParts = [...participants.value];
+                            }
+                            return {
+                                item: exp.item,
+                                amount: exp.amount,
+                                payer: exp.payer,
+                                order: exp.order || null,
+                                splitParticipants: splitParts, // 確保永遠有明確的值
+                            };
+                        });
 
                         // 建立本地的 map（key 為 order）
                         const localByOrder = new Map();
@@ -2154,7 +2353,9 @@
                                 if (
                                     exp.item !== remoteExp.item ||
                                     exp.amount !== remoteExp.amount ||
-                                    exp.payer !== remoteExp.payer
+                                    exp.payer !== remoteExp.payer ||
+                                    JSON.stringify(exp.splitParticipants || []) !==
+                                        JSON.stringify(remoteExp.splitParticipants || [])
                                 ) {
                                     updatedExpenses[index] = { ...remoteExp };
                                     hasChanges = true;
@@ -2231,11 +2432,19 @@
                             // 使用 order 作為文件 ID，確保與本地唯一識別一致
                             const expenseDocRef = doc(expensesCollection, expense.order);
 
+                            // 確保 splitParticipants 有明確的值（不能是空陣列）
+                            let splitParts = expense.splitParticipants;
+                            if (!splitParts || !Array.isArray(splitParts) || splitParts.length === 0) {
+                                // 如果沒有分攤成員，使用當前全員列表
+                                splitParts = [...participants.value];
+                            }
+
                             await setDoc(expenseDocRef, {
                                 item: expense.item,
                                 amount: expense.amount,
                                 payerName: expense.payer,
                                 order: expense.order,
+                                splitParticipants: splitParts, // 確保永遠有明確的值
                                 createdAt: Timestamp.now(),
                             });
 
@@ -2773,12 +2982,23 @@
                                 tripId = cloudTripId.value;
                                 inviteCodeToUse = inviteCode.value || generateInviteCode();
 
+                                // 重要：在上傳前先取消監聽器，避免刪除資料時觸發監聽器清空本地資料
+                                if (expensesUnsubscribe) {
+                                    console.log('🔇 暫時取消監聽器（上傳中）');
+                                    expensesUnsubscribe();
+                                    expensesUnsubscribe = null;
+                                }
+
+                                // 標記為本地更新，避免任何監聽器觸發
+                                isLocalUpdate = true;
+
                                 // 更新 trips 主文件（完全覆蓋，不使用 merge）
                                 await setDoc(doc(firestoreDb, 'trips', tripId), {
                                     destination: setup.value.destination,
                                     startDate: setup.value.startDate,
                                     daysCount: days.value.length,
                                     inviteCode: inviteCodeToUse,
+                                    participants: participantsStr.value, // 保存分帳成員
                                     config: {
                                         currency: setup.value.currency,
                                         rate: setup.value.rate,
@@ -2791,6 +3011,7 @@
                                 // 檢查是否被取消
                                 if (silent && expensesSyncAbortFlag) {
                                     console.log('⚠️ 同步已被取消，停止上傳');
+                                    isLocalUpdate = false;
                                     return;
                                 }
 
@@ -2800,6 +3021,7 @@
                                     // 檢查是否被取消
                                     if (silent && expensesSyncAbortFlag) {
                                         console.log('⚠️ 同步已被取消，停止上傳');
+                                        isLocalUpdate = false;
                                         return;
                                     }
                                     await deleteDoc(doc(firestoreDb, `trips/${tripId}/days`, oldDayDoc.id));
@@ -2811,6 +3033,7 @@
                                     // 檢查是否被取消
                                     if (silent && expensesSyncAbortFlag) {
                                         console.log('⚠️ 同步已被取消，停止上傳');
+                                        isLocalUpdate = false;
                                         return;
                                     }
                                     const oldExpensesSnapshot = await getDocs(
@@ -2820,6 +3043,7 @@
                                         // 檢查是否被取消
                                         if (silent && expensesSyncAbortFlag) {
                                             console.log('⚠️ 同步已被取消，停止上傳');
+                                            isLocalUpdate = false;
                                             return;
                                         }
                                         await deleteDoc(
@@ -2835,6 +3059,7 @@
                                     startDate: setup.value.startDate,
                                     daysCount: days.value.length,
                                     inviteCode: inviteCodeToUse,
+                                    participants: participantsStr.value, // 保存分帳成員
                                     config: {
                                         currency: setup.value.currency,
                                         rate: setup.value.rate,
@@ -2879,14 +3104,14 @@
                             }
 
                             // 上傳 sharedExpenses 子集合
-                            // 標記為本地更新，避免觸發監聽器
-                            isLocalUpdate = true;
+                            // 注意：isLocalUpdate 已在刪除資料前設置
                             if (expenses.value.length > 0) {
                                 const expensesCollection = collection(firestoreDb, `trips/${tripId}/sharedExpenses`);
                                 for (const expense of expenses.value) {
                                     // 檢查是否被取消（在循環中）
                                     if (silent && expensesSyncAbortFlag) {
                                         console.log('⚠️ 同步已被取消，停止上傳');
+                                        isLocalUpdate = false;
                                         return;
                                     }
 
@@ -2895,19 +3120,23 @@
                                         expense.order = `${Date.now()}_${expense.payer || 'payer'}`;
                                     }
 
+                                    // 確保 splitParticipants 有明確的值（不能是空陣列）
+                                    let splitParts = expense.splitParticipants;
+                                    if (!splitParts || !Array.isArray(splitParts) || splitParts.length === 0) {
+                                        // 如果沒有分攤成員，使用當前全員列表
+                                        splitParts = [...participants.value];
+                                    }
+
                                     await addDoc(expensesCollection, {
                                         item: expense.item,
                                         amount: expense.amount,
                                         payerName: expense.payer,
                                         order: expense.order,
+                                        splitParticipants: splitParts, // 確保永遠有明確的值
                                         createdAt: Timestamp.now(),
                                     });
                                 }
                             }
-                            // 上傳完成後，等待一小段時間再重置標記，確保監聽器不會觸發
-                            setTimeout(() => {
-                                isLocalUpdate = false;
-                            }, 1000);
 
                             // 儲存雲端資訊到 localStorage
                             const cloudData = {
@@ -2928,6 +3157,11 @@
                                 trip.isCloudTrip = true;
                                 saveTripList();
                             }
+
+                            // 等待一小段時間確保所有上傳操作完成，然後重置標記
+                            await new Promise((resolve) => setTimeout(resolve, 500));
+                            isLocalUpdate = false;
+                            console.log('✅ 上傳完成，重置 isLocalUpdate 標記');
 
                             // 設定即時監聽器（監聽 sharedExpenses 的變更）
                             await setupExpensesRealtimeListener();
@@ -2951,6 +3185,8 @@
                             }
                         } finally {
                             isUploading.value = false;
+                            // 確保重置 isLocalUpdate 標記（避免錯誤時標記一直為 true）
+                            isLocalUpdate = false;
                             // 如果是背景自動同步，確保重置同步狀態
                             if (silent) {
                                 expensesSyncInProgress = false;
@@ -2992,9 +3228,41 @@
 
                         isSyncing.value = true;
 
+                        // 標記為本地更新，避免監聽器觸發
+                        isLocalUpdate = true;
+
                         try {
                             const firestoreModule = await getFirestoreModule();
                             const { collection, getDocs, doc, getDoc } = firestoreModule;
+
+                            // 優先同步 trip 基本資訊（特別是 destination），讓 UI 可以更早顯示
+                            console.log('⚙️ 正在撈取旅程設定 (config)...');
+                            const tripDoc = await getDoc(doc(firestoreDb, `trips/${cloudTripId.value}`));
+                            console.log('⚙️ Trip Doc:', {
+                                exists: tripDoc.exists(),
+                                id: tripDoc.id,
+                                data: tripDoc.exists() ? tripDoc.data() : null,
+                            });
+
+                            if (tripDoc.exists()) {
+                                const tripData = tripDoc.data();
+                                console.log('📋 Trip 完整資料:', tripData);
+
+                                // 優先同步 destination（讓 UI 可以立即更新）
+                                const syncedDestination =
+                                    tripData.destination || (tripData.config && tripData.config.destination);
+                                if (syncedDestination) {
+                                    setup.value.destination = syncedDestination;
+                                    console.log('✅ Destination 已更新（優先同步）:', syncedDestination);
+
+                                    // 更新 tripList 中的 destination
+                                    const trip = tripList.value.find((t) => t.id === currentTripId.value);
+                                    if (trip) {
+                                        trip.destination = syncedDestination;
+                                        saveTripList();
+                                    }
+                                }
+                            }
 
                             // 同步 days
                             console.log('📅 正在撈取行程資料 (days)...');
@@ -3048,11 +3316,18 @@
                             const syncedExpenses = [];
                             expensesSnapshot.forEach((doc) => {
                                 const data = doc.data();
+                                // 處理舊資料：如果沒有 splitParticipants 或為空陣列，使用當前全員作為預設值
+                                let splitParts = data.splitParticipants;
+                                if (!splitParts || !Array.isArray(splitParts) || splitParts.length === 0) {
+                                    // 舊資料或空陣列：使用當前全員列表（這是合理的預設值）
+                                    splitParts = [...participants.value];
+                                }
                                 syncedExpenses.push({
                                     item: data.item,
                                     amount: data.amount,
                                     payer: data.payerName,
                                     order: data.order || null,
+                                    splitParticipants: splitParts, // 確保永遠有明確的值
                                 });
                             });
                             expenses.value = syncedExpenses;
@@ -3061,33 +3336,9 @@
                                 expenses: syncedExpenses,
                             });
 
-                            // 同步 trip 基本資訊（config）
-                            console.log('⚙️ 正在撈取旅程設定 (config)...');
-                            const tripDoc = await getDoc(doc(firestoreDb, `trips/${cloudTripId.value}`));
-                            console.log('⚙️ Trip Doc:', {
-                                exists: tripDoc.exists(),
-                                id: tripDoc.id,
-                                data: tripDoc.exists() ? tripDoc.data() : null,
-                            });
-
+                            // 同步 config 中的其他設定（destination 已在前面優先同步，這裡不再覆蓋）
                             if (tripDoc.exists()) {
                                 const tripData = tripDoc.data();
-                                console.log('📋 Trip 完整資料:', tripData);
-
-                                // 同步根層級的 destination（優先，因為上傳時 destination 存在根層級）
-                                const syncedDestination =
-                                    tripData.destination || (tripData.config && tripData.config.destination);
-                                if (syncedDestination) {
-                                    setup.value.destination = syncedDestination;
-                                    console.log('✅ Destination 已更新:', syncedDestination);
-
-                                    // 更新 tripList 中的 destination
-                                    const trip = tripList.value.find((t) => t.id === currentTripId.value);
-                                    if (trip) {
-                                        trip.destination = syncedDestination;
-                                        saveTripList();
-                                    }
-                                }
 
                                 // 同步 config 中的其他設定（但不覆蓋已同步的 destination）
                                 if (tripData.config) {
@@ -3107,6 +3358,31 @@
                                 if (tripData.inviteCode) {
                                     inviteCode.value = tripData.inviteCode;
                                     console.log('✅ 邀請碼已更新:', inviteCode.value);
+                                }
+
+                                // 同步分帳成員（優先使用 Firestore 中的 participants）
+                                if (tripData.participants) {
+                                    participantsStr.value = tripData.participants;
+                                    updateParticipants();
+                                    console.log('✅ 分帳成員已更新:', participantsStr.value);
+                                } else {
+                                    // 如果 Firestore 中沒有 participants，檢查 localStorage 是否有
+                                    const localUsers = localStorage.getItem(
+                                        getStorageKey(currentTripId.value, 'users')
+                                    );
+                                    if (localUsers) {
+                                        participantsStr.value = localUsers;
+                                        updateParticipants();
+                                        console.log(
+                                            '⚠️ Firestore 中沒有 participants，使用本地資料:',
+                                            participantsStr.value
+                                        );
+                                    } else {
+                                        // 如果都沒有，使用預設值
+                                        participantsStr.value = DEFAULT_PARTICIPANTS_STR;
+                                        updateParticipants();
+                                        console.log('⚠️ 使用預設分帳成員:', participantsStr.value);
+                                    }
                                 }
                             } else {
                                 console.warn('⚠️ Trip 文件不存在');
@@ -3179,6 +3455,9 @@
                             }
                         } finally {
                             isSyncing.value = false;
+                            // 重置 isLocalUpdate 標記
+                            isLocalUpdate = false;
+                            console.log('✅ 同步完成，重置 isLocalUpdate 標記');
                         }
                     };
 
@@ -3407,7 +3686,9 @@
                                 // 初始化空的資料
                                 saveToStorage(newLocalId, 'days', []);
                                 saveToStorage(newLocalId, 'exp', []);
-                                localStorage.setItem(getStorageKey(newLocalId, 'users'), DEFAULT_PARTICIPANTS_STR);
+                                // 使用 Firestore 中的 participants，如果沒有則使用預設值
+                                const participantsFromCloud = tripData.participants || DEFAULT_PARTICIPANTS_STR;
+                                localStorage.setItem(getStorageKey(newLocalId, 'users'), participantsFromCloud);
                                 localStorage.setItem(
                                     getStorageKey(newLocalId, 'rate'),
                                     (tripData.config?.rate || DEFAULT_EXCHANGE_RATE).toString()
@@ -3437,10 +3718,21 @@
                         await checkInviteCodeFromUrl();
 
                         if (tripList.value.length > 0) {
-                            // 優先載入日本行程
-                            const jpTrip = tripList.value.find((t) => t.id === JP_TRIP_ID);
-                            if (jpTrip) await switchTrip(JP_TRIP_ID);
-                            else await switchTrip(tripList.value[0].id);
+                            // 優先載入上次選擇的旅程
+                            const lastSelectedTripId = localStorage.getItem('last_selected_trip_id');
+                            const lastSelectedTrip = lastSelectedTripId
+                                ? tripList.value.find((t) => t.id === lastSelectedTripId)
+                                : null;
+
+                            if (lastSelectedTrip) {
+                                // 如果上次選擇的旅程仍存在，載入它
+                                await switchTrip(lastSelectedTripId);
+                            } else {
+                                // 否則優先載入日本行程
+                                const jpTrip = tripList.value.find((t) => t.id === JP_TRIP_ID);
+                                if (jpTrip) await switchTrip(JP_TRIP_ID);
+                                else await switchTrip(tripList.value[0].id);
+                            }
                         } else {
                             showSetupModal.value = true;
                         }
@@ -3473,6 +3765,20 @@
                             { deep: true }
                         );
 
+                        // 參與者變更時重置預設分攤
+                        watch(
+                            participants,
+                            () => {
+                                if (!isPersonalMode.value) resetNewExpenseSplits();
+                            },
+                            { deep: true }
+                        );
+
+                        // 切換多人模式時自動全選分攤
+                        watch(isPersonalMode, (val) => {
+                            if (!val) resetNewExpenseSplits();
+                        });
+
                         // 監聽 destination 變化並調整字體大小
                         watch(
                             () => setup.value.destination,
@@ -3486,6 +3792,10 @@
 
                         // 初始調整字體大小
                         adjustDestinationFontSize();
+
+                        if (!isPersonalMode.value) {
+                            resetNewExpenseSplits();
+                        }
                     });
 
                     // Map & User Location Logic
@@ -3607,13 +3917,16 @@
                         isPersonalMode,
                         currentExpenses,
                         newExpense,
+                        selectAllSplits,
                         totalExpense,
                         addExpense,
                         removeExpense,
                         paidByPerson,
+                        owedByPerson,
                         settlementPlan,
                         exchangeRate,
                         getTimePeriod,
+                        getExpenseSplitAmount,
                         weather,
                         isMapLoading,
                         userLocation,
