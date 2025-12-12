@@ -22,9 +22,6 @@ export function useViewState(
     const titleInputRef = ref<HTMLElement | null>(null);
     const titleTextRef = ref<HTMLElement | null>(null);
 
-    const isEditingDestination = ref(false);
-    const editingDestinationValue = ref('');
-    const destinationInputRef = ref<HTMLElement | null>(null);
 
     const adjustTitleFontSize = () => {
         nextTick(() => {
@@ -57,19 +54,19 @@ export function useViewState(
 
     const saveTitle = async () => {
         const newTitle = editingTitleValue.value.trim();
-        if (newTitle) {
-            setup.value.title = newTitle;
-            if (currentTripId.value) {
-                saveToStorage(currentTripId.value, 'config', setup.value);
-                const trip = tripList.value.find((t) => t.id === currentTripId.value);
-                if (trip) {
-                    trip.destination = newTitle;
-                    saveTripList();
-                }
+        const finalTitle = newTitle;
+        setup.value.title = finalTitle;
+        if (currentTripId.value) {
+            saveToStorage(currentTripId.value, 'config', setup.value);
+            const trip = tripList.value.find((t) => t.id === currentTripId.value);
+            if (trip) {
+                trip.destination = finalTitle || setup.value.destination || '你的旅程?';
+                saveTripList();
             }
-            adjustTitleFontSize();
         }
+        adjustTitleFontSize();
         isEditingTitle.value = false;
+        editingTitleValue.value = '';
     };
 
     const cancelEditTitle = () => {
@@ -77,34 +74,9 @@ export function useViewState(
         editingTitleValue.value = '';
     };
 
-    const startEditDestination = () => {
-        editingDestinationValue.value = setup.value.destination || '';
-        isEditingDestination.value = true;
-        nextTick(() => {
-            destinationInputRef.value?.focus();
-            (destinationInputRef.value as HTMLInputElement | null)?.select?.();
-        });
-    };
-
-    const saveDestination = async () => {
-        const newDestination = editingDestinationValue.value.trim();
-        if (newDestination) {
-            const oldDestination = setup.value.destination;
-            setup.value.destination = newDestination;
-            if (currentTripId.value) {
-                saveToStorage(currentTripId.value, 'config', setup.value);
-            }
-            if (newDestination !== oldDestination) {
-                await detectRate();
-                await fetchWeather(newDestination);
-            }
-        }
-        isEditingDestination.value = false;
-    };
-
-    const cancelEditDestination = () => {
-        isEditingDestination.value = false;
-        editingDestinationValue.value = '';
+    const closeEditModal = () => {
+        isEditingTitle.value = false;
+        editingTitleValue.value = '';
     };
 
     watch(
@@ -114,15 +86,6 @@ export function useViewState(
         }
     );
 
-    watch(
-        () => setup.value.destination,
-        (val, oldVal) => {
-            if (val && val !== oldVal) {
-                detectRate();
-                fetchWeather(val);
-            }
-        }
-    );
 
     onMounted(() => {
         window.addEventListener('resize', adjustTitleFontSize);
@@ -148,12 +111,7 @@ export function useViewState(
         saveTitle,
         cancelEditTitle,
         adjustTitleFontSize,
-        isEditingDestination,
-        editingDestinationValue,
-        destinationInputRef,
-        startEditDestination,
-        saveDestination,
-        cancelEditDestination,
+        closeEditModal,
     };
 }
 

@@ -12,6 +12,20 @@ export interface Day {
     items: DayItem[];
     flight: Flight | null;
     order?: number;
+    region?: string; // 該行程的地區設定
+    weather?: DayWeather; // 該行程的天氣資料
+}
+
+export interface DayWeather {
+    temp: number | string | null;
+    icon: string;
+    location: string;
+    daily?: {
+        time: string[];
+        temperature_2m_max: number[];
+        temperature_2m_min: number[];
+        weathercode: number[];
+    };
 }
 
 export interface DayItem {
@@ -20,6 +34,8 @@ export interface DayItem {
     activity: string;
     location: string;
     note: string;
+    region?: string; // 該旅程項目的地區設定
+    weather?: DayWeather; // 該旅程項目的天氣資料
 }
 
 export interface Flight {
