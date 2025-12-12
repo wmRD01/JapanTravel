@@ -475,7 +475,7 @@
 
         <!-- 地圖視圖 -->
         <div v-if="viewMode === 'map'" class="h-full flex flex-col relative">
-            <div id="map" class="flex-1 w-full h-full bg-slate-200 z-0"></div>
+            <div id="map" class="flex-1 w-full h-full min-h-[360px] bg-slate-200 z-0"></div>
             <div
                 v-if="isMapLoading"
                 class="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-teal-600"

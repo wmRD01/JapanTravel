@@ -34,6 +34,8 @@ export function useMapView(
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap',
         }).addTo(mapInstance);
+        // 確保容器尺寸被 Leaflet 正確計算，避免初次渲染空白
+        setTimeout(() => mapInstance?.invalidateSize(), 150);
         if ('geolocation' in navigator) {
             if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
             geoWatchId = navigator.geolocation.watchPosition(
