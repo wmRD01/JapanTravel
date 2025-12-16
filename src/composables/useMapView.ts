@@ -1,5 +1,6 @@
 import { nextTick, ref, watch, type Ref } from 'vue';
 import type { Day } from '../types';
+import { geocodeText } from '../utils/geoapify';
 
 export function useMapView(
     currentDay: Ref<Day>,
@@ -63,14 +64,10 @@ export function useMapView(
         const bounds = L.latLngBounds();
         for (const item of locs) {
             try {
-                await new Promise((r) => setTimeout(r, 500));
-                const res = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(item.location)}`
-                );
-                const d = await res.json();
-                if (d && d.length > 0) {
-                    const lat = parseFloat(d[0].lat);
-                    const lon = parseFloat(d[0].lon);
+                await new Promise((r) => setTimeout(r, 300));
+                const geo = await geocodeText(item.location);
+                if (geo) {
+                    const { lat, lon } = geo;
                     L.marker([lat, lon])
                         .addTo(mapInstance)
                         .bindPopup(`<b>${item.activity}</b><br>${item.location}`);
@@ -81,7 +78,7 @@ export function useMapView(
             }
         }
         isMapLoading.value = false;
-        if (locs.length > 0) mapInstance.fitBounds(bounds, { padding: [50, 50] });
+        if (locs.length > 0 && bounds.isValid()) mapInstance.fitBounds(bounds, { padding: [50, 50] });
     };
 
     const centerOnUser = (): void => {

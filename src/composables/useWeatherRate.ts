@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from 'vue';
 import type { Day, Setup } from '../types';
 import { getWeatherIcon } from '../utils/weather';
+import { geocodeText } from '../utils/geoapify';
 
 // 併攏天氣與匯率偵測相關邏輯
 export function useWeatherRate(setup: Ref<Setup>, currentDay: Ref<Day>) {
@@ -21,57 +22,28 @@ export function useWeatherRate(setup: Ref<Setup>, currentDay: Ref<Day>) {
         th: { c: 'THB', l: 'th', n: '泰文' },
     };
 
+    // 旅程層 destination 已棄用，匯率由分帳區的幣別選擇觸發，這裡保留空實作以符合介面
     const detectRate = async (): Promise<void> => {
-        if (!setup.value.destination) return;
-        isRateLoading.value = true;
-        try {
-            const geoRes = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-                    setup.value.destination
-                )}&limit=1&addressdetails=1`
-            );
-            const geoData = await geoRes.json();
-            if (geoData && geoData[0] && geoData[0].address && geoData[0].address.country_code) {
-                const info =
-                    countryInfoMap[geoData[0].address.country_code.toLowerCase()] || {
-                        c: 'USD',
-                        l: 'en',
-                        n: '英文',
-                    };
-                setup.value.currency = info.c;
-                setup.value.langCode = info.l;
-                setup.value.langName = info.n;
-                if (info.c === 'TWD') setup.value.rate = 1;
-                else {
-                    const rRes = await fetch(`https://api.exchangerate-api.com/v4/latest/${info.c}`);
-                    const rData = await rRes.json();
-                    if (rData && rData.rates && rData.rates.TWD) setup.value.rate = rData.rates.TWD;
-                }
-            }
-        } catch (e) {
-            // ignore
-        } finally {
-            isRateLoading.value = false;
-        }
+        return;
     };
 
     const fetchWeather = async (locName: string): Promise<void> => {
         try {
             weather.value.location = locName;
-            const geoRes = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locName)}&limit=1`
-            );
-            const geoData = await geoRes.json();
-            if (geoData && geoData[0]) {
-                const { lat, lon } = geoData[0];
-                const wRes = await fetch(
-                    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`
-                );
-                const wData = await wRes.json();
-                weather.value.temp = Math.round(wData.current_weather.temperature);
-                weather.value.icon = getWeatherIcon(wData.current_weather.weathercode);
-                if (wData.daily) weather.value.daily = wData.daily;
+            const geo = await geocodeText(locName);
+            if (!geo) {
+                weather.value.temp = '--';
+                weather.value.daily = [];
+                return;
             }
+            const { lat, lon } = geo;
+            const wRes = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`
+            );
+            const wData = await wRes.json();
+            weather.value.temp = Math.round(wData.current_weather.temperature);
+            weather.value.icon = getWeatherIcon(wData.current_weather.weathercode);
+            if (wData.daily) weather.value.daily = wData.daily;
         } catch (e) {
             weather.value.temp = '--';
         }
@@ -95,7 +67,8 @@ export function useWeatherRate(setup: Ref<Setup>, currentDay: Ref<Day>) {
     });
 
     const weatherDisplay = computed(() => {
-        const destination = (setup.value && setup.value.destination) || '當地';
+        // 旅程層 destination 已棄用，顯示「當地」
+        const destination = '當地';
         if (!currentDay.value || !currentDay.value.fullDate || weather.value.daily.length === 0) {
             return {
                 temp: weather.value.temp !== null ? `${weather.value.temp}°` : '--',

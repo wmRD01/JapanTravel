@@ -5,20 +5,27 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { JP_EXPENSES, JP_TRIP_DATA, JP_TRIP_ID } from '../data/trip-data';
 import { useCloudExpenses } from './composables/useCloudExpenses';
 import { useCloudSync } from './composables/useCloudSync';
+import { useDayPlan } from './composables/useDayPlan';
 import { useExpenses } from './composables/useExpenses';
 import { useInviteCode } from './composables/useInviteCode';
 import { useLocalPersistence } from './composables/useLocalPersistence';
 import { useMapView } from './composables/useMapView';
 import { useRecommendations } from './composables/useRecommendations';
+import { useTranslate } from './composables/useTranslate';
 import { useTripManagement } from './composables/useTripManagement';
 import { useViewState } from './composables/useViewState';
+import { useWeather } from './composables/useWeather';
 import { useWeatherRate } from './composables/useWeatherRate';
 import { DEFAULT_EXCHANGE_RATE, DEFAULT_PARTICIPANTS, DEFAULT_PARTICIPANTS_STR } from './constants/index';
-import type { Day, DayItem, Expense, TripMeta } from './types/index';
+import type { Day, DayItem, Expense, SettlementPlan, TripMeta } from './types/index';
 import { formatDate } from './utils/date';
 import { getExpenseSplitAmount } from './utils/expense';
 import { getStorageKey } from './utils/storage';
 import { getWeatherIcon } from './utils/weather';
+import PlanView from './components/PlanView.vue';
+import MoneyView from './components/MoneyView.vue';
+import TranslateView from './components/TranslateView.vue';
+import TripSidebar from './components/TripSidebar.vue';
 
 // 基礎狀態
 const days = ref<Day[]>([]);
@@ -28,6 +35,8 @@ const isPersonalMode = ref(false);
 const participants = ref<string[]>([...DEFAULT_PARTICIPANTS]);
 const participantsStr = ref(DEFAULT_PARTICIPANTS_STR);
 const exchangeRate = ref(DEFAULT_EXCHANGE_RATE);
+
+// 天氣相關邏輯已移至 useWeather composable
 const newExpense = ref({
     item: '',
     amount: '',
@@ -39,11 +48,17 @@ const timeInputRefs = ref<Record<string, HTMLInputElement>>({});
 const isEditingNote = ref(false);
 const editingNoteValue = ref('');
 const editingNoteTarget = ref<DayItem | null>(null);
+
+// 國家區塊編輯/插入狀態
+const isEditingCountryDivider = ref(false);
+const editingCountryDivider = ref<DayItem | null>(null);
+const editingCountryName = ref('');
+const editingCountryCode = ref('');
+const insertCountryDividerIndex = ref(-1); // 插入位置索引
 const tripList = ref<TripMeta[]>([]);
 const currentTripId = ref<string | null>(null);
 const setup = ref({
     title: '',
-    destination: '',
     startDate: new Date().toISOString().split('T')[0],
     days: 5,
     rate: 0.215,
@@ -58,6 +73,7 @@ const isUploading = ref(false);
 const isSyncing = ref(false);
 const expensesSyncInProgress = ref(false);
 const expensesSyncAbortFlag = ref(false);
+const showInviteModal = ref(false);
 let isLocalUpdate = false;
 let expensesUnsubscribe: (() => void) | null = null;
 
@@ -119,6 +135,27 @@ const {
 detectRateRef.value = detectRate;
 fetchWeatherRef.value = fetchWeather;
 
+// 匯率：依幣別自動抓取（用於分帳設定）
+const fetchRateByCurrency = async (currencyCode: string) => {
+    if (!currencyCode) return;
+    isRateLoading.value = true;
+    try {
+        if (currencyCode === 'TWD') {
+            setup.value.rate = 1;
+            return;
+        }
+        const rRes = await fetch(`https://api.exchangerate-api.com/v4/latest/${currencyCode}`);
+        const rData = await rRes.json();
+        if (rData && rData.rates && rData.rates.TWD) {
+            setup.value.rate = rData.rates.TWD;
+        }
+    } catch (e) {
+        console.error('匯率抓取失敗', e);
+    } finally {
+        isRateLoading.value = false;
+    }
+};
+
 // 地圖與定位
 const { isMapLoading, userLocation, initMap, centerOnUser } = useMapView(
     currentDay,
@@ -127,7 +164,7 @@ const { isMapLoading, userLocation, initMap, centerOnUser } = useMapView(
     newExpense
 );
 
-// 推薦系統
+// 推薦系統（Geoapify）
 const {
     recommendationsMap,
     isSearchingRecs,
@@ -136,8 +173,24 @@ const {
     applyRecommendation,
 } = useRecommendations();
 
-// searchNearby 包裝
 const searchNearby = (item: any, idx: number) => searchNearbyRec(item, idx, currentDayIdx.value);
+
+// 使用 useDayPlan composable
+const dayPlan = useDayPlan(days, currentDayIdx);
+
+// 使用 useWeather composable
+const {
+    isItemWeatherLoading,
+    isDayWeatherLoading,
+    onItemRegionChange,
+    clearItemRegion,
+    loadDayItemsWeather,
+    reloadDayWeather,
+    itemWeatherDisplay,
+} = useWeather(days, currentDayIdx, dayPlan.getCountryDividerAbove);
+
+// 使用 useTranslate composable
+const translate = useTranslate();
 
 // Helper 函數
 const resetNewExpenseSplits = () => {
@@ -160,6 +213,26 @@ const updateParticipants = () => {
         localStorage.setItem(getStorageKey(currentTripId.value, 'users'), participantsStr.value);
     }
 };
+
+// v-for key / 重複計算最佳化 --------------------------------
+
+// Day / DayItem / Expense / SettlementPlan 的穩定 key 生成
+const getDayKey = (day: Day, index: number) => day.fullDate || day.date || `day-${index}`;
+
+const getItemKey = (item: DayItem, idx: number) =>
+    `${item.time || 'no-time'}-${item.activity || 'item'}-${idx}`;
+
+const getSettlementKey = (plan: SettlementPlan, idx: number) =>
+    `${plan.from}-${plan.to}-${plan.amount}-${idx}`;
+
+const getExpenseKey = (exp: Expense, idx: number) => exp.order || `exp-${idx}`;
+
+// 金額相關重複運算抽成 computed
+const totalExpenseInTWD = computed(() => Math.round(totalExpense.value * exchangeRate.value));
+
+const jpExpensesTotal = computed(() =>
+    JP_EXPENSES.reduce((sum, e) => sum + e.amount, 0)
+);
 
 const updateDate = (e: any, day: any) => {
     const val = e.target.value;
@@ -205,67 +278,15 @@ const toggleFlightCard = () => {
     }
 };
 
-// 載入單個行程的天氣資料
-const fetchDayWeather = async (day: Day, location: string): Promise<void> => {
-    if (!location || !day.fullDate) return;
+// fetchDayWeather 已移至 useWeather composable，此處保留用於向後兼容（如果需要）
 
-    try {
-        // 初始化天氣資料結構
-        if (!day.weather) {
-            day.weather = {
-                temp: null,
-                icon: 'ph-sun',
-                location: '',
-            };
-        }
-
-        day.weather.location = location;
-
-        // 取得地理座標
-        const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`
-        );
-        const geoData = await geoRes.json();
-
-        if (geoData && geoData[0]) {
-            const { lat, lon } = geoData[0];
-
-            // 取得天氣預報
-            const wRes = await fetch(
-                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`
-            );
-            const wData = await wRes.json();
-
-            if (wData.current_weather) {
-                day.weather.temp = Math.round(wData.current_weather.temperature);
-                day.weather.icon = getWeatherIcon(wData.current_weather.weathercode);
-            }
-
-            if (wData.daily) {
-                day.weather.daily = {
-                    time: wData.daily.time || [],
-                    temperature_2m_max: wData.daily.temperature_2m_max || [],
-                    temperature_2m_min: wData.daily.temperature_2m_min || [],
-                    weathercode: wData.daily.weathercode || [],
-                };
-            }
-        }
-    } catch (error) {
-        console.error('載入行程天氣失敗:', error);
-        if (day.weather) {
-            day.weather.temp = '--';
-            day.weather.icon = 'ph-cloud-slash';
-        }
-    }
-};
-
-// 處理行程地區變更
+// 處理行程地區變更（已移至 useWeather composable，此處保留用於向後兼容）
 const onDayRegionChange = async (day: Day) => {
-    const location = day.region?.trim() || setup.value.destination;
+    const location = day.region?.trim();
     if (location) {
-        await fetchDayWeather(day, location);
-    } else if (day.weather) {
-        // 清除天氣資料
+        // 使用 useWeatherRate 的 fetchWeather
+        await fetchWeather(location);
+    } else {
         day.weather = undefined;
     }
 };
@@ -278,11 +299,12 @@ const clearDayRegion = (day: Day) => {
 
 // 取得行程天氣顯示資料
 const dayWeatherDisplay = (day: Day) => {
-    const location = day.region?.trim() || setup.value.destination || '當地';
-    
     if (!day.weather) {
         return null;
     }
+
+    // 優先使用天氣資料中儲存的地區，否則使用 day.region
+    const location = day.weather.location || day.region?.trim() || '當地';
 
     // 如果有當日預報資料
     if (day.fullDate && day.weather.daily && day.weather.daily.time.length > 0) {
@@ -308,114 +330,58 @@ const dayWeatherDisplay = (day: Day) => {
     };
 };
 
-// 載入單個旅程項目的天氣資料
-const fetchItemWeather = async (item: DayItem, day: Day, location: string): Promise<void> => {
-    if (!location || !day.fullDate) return;
+// 天氣相關函數已移至 useWeather composable
 
-    try {
-        // 初始化天氣資料結構
-        if (!item.weather) {
-            item.weather = {
-                temp: null,
-                icon: 'ph-sun',
-                location: '',
-            };
-        }
-
-        item.weather.location = location;
-
-        // 取得地理座標
-        const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`
-        );
-        const geoData = await geoRes.json();
-
-        if (geoData && geoData[0]) {
-            const { lat, lon } = geoData[0];
-
-            // 取得天氣預報
-            const wRes = await fetch(
-                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=16`
-            );
-            const wData = await wRes.json();
-
-            if (wData.current_weather) {
-                item.weather.temp = Math.round(wData.current_weather.temperature);
-                item.weather.icon = getWeatherIcon(wData.current_weather.weathercode);
-            }
-
-            if (wData.daily) {
-                item.weather.daily = {
-                    time: wData.daily.time || [],
-                    temperature_2m_max: wData.daily.temperature_2m_max || [],
-                    temperature_2m_min: wData.daily.temperature_2m_min || [],
-                    weathercode: wData.daily.weathercode || [],
-                };
-            }
-        }
-    } catch (error) {
-        console.error('載入旅程項目天氣失敗:', error);
-        if (item.weather) {
-            item.weather.temp = '--';
-            item.weather.icon = 'ph-cloud-slash';
-        }
-    }
-};
-
-// 處理旅程項目地區變更
-const onItemRegionChange = async (item: DayItem, day: Day) => {
-    // 如果地區被清空，立即清除天氣
-    if (!item.region || !item.region.trim()) {
-        item.weather = undefined;
-        return;
-    }
-    
-    const location = item.region.trim() || item.location?.trim() || setup.value.destination;
-    if (location) {
-        await fetchItemWeather(item, day, location);
-    } else if (item.weather) {
-        // 清除天氣資料
-        item.weather = undefined;
-    }
-};
-
-// 清除旅程項目地區
-const clearItemRegion = (item: DayItem) => {
-    item.region = undefined;
-    item.weather = undefined;
-};
-
-// 取得旅程項目天氣顯示資料
-const itemWeatherDisplay = (item: DayItem, day: Day) => {
-    const location = item.region?.trim() || item.location?.trim() || setup.value.destination || '當地';
-    
-    if (!item.weather) {
-        return null;
-    }
-
-    // 如果有當日預報資料
-    if (day.fullDate && item.weather.daily && item.weather.daily.time.length > 0) {
-        const idx = item.weather.daily.time.indexOf(day.fullDate);
-        if (idx !== -1) {
-            const max = Math.round(item.weather.daily.temperature_2m_max[idx]);
-            const min = Math.round(item.weather.daily.temperature_2m_min[idx]);
-            return {
-                temp: `${min}° - ${max}°`,
-                icon: getWeatherIcon(item.weather.daily.weathercode[idx]),
-                label: `${location} (預報)`,
-                isForecast: true,
-            };
-        }
-    }
-
-    // 使用目前天氣
-    return {
-        temp: item.weather.temp !== null ? `${item.weather.temp}°` : '--',
-        icon: item.weather.icon || 'ph-sun',
-        label: `${location} (目前)`,
-        isForecast: false,
+// 國家代碼轉換為國家名稱（簡化版）
+const getCountryName = (countryCode: string): string => {
+    const countryMap: Record<string, string> = {
+        'JP': '日本',
+        'TW': '台灣',
+        'VN': '越南',
+        'KR': '韓國',
+        'CN': '中國',
+        'US': '美國',
+        'TH': '泰國',
+        'SG': '新加坡',
+        'MY': '馬來西亞',
+        'ID': '印尼',
+        'PH': '菲律賓',
+        'HK': '香港',
+        'MO': '澳門',
     };
+    return countryMap[countryCode.toUpperCase()] || countryCode;
 };
+
+// 獲取國旗 emoji
+const getCountryFlag = (countryCode: string | undefined): string => {
+    if (!countryCode) return '🏳️';
+    const code = countryCode.toUpperCase();
+    // 使用 Unicode 區域指示符號生成國旗
+    const flagMap: Record<string, string> = {
+        'JP': '🇯🇵',
+        'TW': '🇹🇼',
+        'VN': '🇻🇳',
+        'KR': '🇰🇷',
+        'CN': '🇨🇳',
+        'US': '🇺🇸',
+        'TH': '🇹🇭',
+        'SG': '🇸🇬',
+        'MY': '🇲🇾',
+        'ID': '🇮🇩',
+        'PH': '🇵🇭',
+        'HK': '🇭🇰',
+        'MO': '🇲🇴',
+    };
+    return flagMap[code] || '🏳️';
+};
+
+// 國家區塊相關函數已移至 useDayPlan composable，使用 dayPlan 的函數
+const showInsertCountryDividerModal = dayPlan.showInsertCountryDividerModal;
+const startEditCountryDivider = dayPlan.startEditCountryDivider;
+const closeCountryDividerModal = dayPlan.closeCountryDividerModal;
+const saveCountryDivider = dayPlan.saveCountryDivider;
+
+// 天氣相關函數已移至 useWeather composable
 
 const getDotColor = (t: string) =>
     t === 'food'
@@ -457,6 +423,43 @@ const addItem = () => {
 
 const removeItem = (idx: number) => {
     currentDay.value.items.splice(idx, 1);
+};
+
+// ========== 國家區塊相關功能 ==========
+
+// 國家區塊相關函數已移至 useDayPlan composable
+
+// 刪除國家區塊已移至 useDayPlan composable
+const removeCountryDivider = dayPlan.removeCountryDivider;
+
+// 移動項目（上移）
+const moveItemUp = (idx: number) => {
+    if (idx <= 0) return; // 已經是最上面，無法上移
+    const items = currentDay.value.items;
+    // 交換位置
+    [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
+};
+
+// 移動項目（下移）
+const moveItemDown = (idx: number) => {
+    const items = currentDay.value.items;
+    if (idx >= items.length - 1) return; // 已經是最下面，無法下移
+    // 交換位置
+    [items[idx], items[idx + 1]] = [items[idx + 1], items[idx]];
+};
+
+// 檢查是否需要插入國家區塊（自動插入邏輯）
+const checkAndInsertCountryDivider = async (item: DayItem, itemIndex: number, day: Day, country: string, countryCode: string) => {
+    // 檢查上方是否有相同國家的區塊
+    const dividerAbove = dayPlan.getCountryDividerAbove(itemIndex, day);
+
+    if (!dividerAbove || dividerAbove.countryCode !== countryCode) {
+        // 如果沒有國家區塊或國家不同，自動插入
+        dayPlan.insertCountryDivider(day, itemIndex, country, countryCode);
+        return true; // 已插入
+    }
+
+    return false; // 不需要插入
 };
 
 const addDay = () => {
@@ -621,6 +624,17 @@ watch(inviteCodeComposable.inviteCode, (val: string) => {
     inviteCode.value = val;
 }, { immediate: true });
 
+// 監聽日期與天數變化，自動載入當日所有旅程項目的天氣（初始也觸發）
+watch(
+    [() => days.value, () => currentDayIdx.value],
+    async ([allDays, idx]) => {
+        if (idx >= 0 && allDays[idx]) {
+            await loadDayItemsWeather(allDays[idx]);
+        }
+    },
+    { immediate: true }
+);
+
 // 創建包裝函數以匹配 useExpenses 的期望
 const handleUploadToCloudForExpenses = async (tripId: string, silent: boolean) => {
     if (currentTripId.value !== tripId) {
@@ -719,9 +733,11 @@ const handleShowInviteModal = async (tripId: string) => {
         await switchTrip(tripId);
         await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    if (copyInviteLinkFn) {
-        await copyInviteLinkFn();
-    }
+    showInviteModal.value = true;
+};
+
+const handleDeleteTrip = (tripId: string) => {
+    deleteTrip(tripId);
 };
 
 const handleClearAllLocalStorage = () => {
@@ -741,14 +757,13 @@ const handleClearAllLocalStorage = () => {
     cloudTripId.value = null;
     inviteCode.value = '';
     setup.value = {
-        destination: '',
+        title: '旅遊計畫',
         startDate: new Date().toISOString().split('T')[0],
         days: 5,
         rate: DEFAULT_EXCHANGE_RATE,
         currency: 'JPY',
         langCode: 'ja',
         langName: '日文',
-        title: '旅遊計畫',
     };
     showTripMenu.value = false;
     showSetupModal.value = true;
@@ -787,10 +802,14 @@ onMounted(async () => {
 
 <style scoped>
 .hide-scrollbar {
-    -ms-overflow-style: none; /* IE & Edge */
-    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none;
+    /* IE & Edge */
+    scrollbar-width: none;
+    /* Firefox */
 }
+
 .hide-scrollbar::-webkit-scrollbar {
-    display: none; /* Chrome, Safari */
+    display: none;
+    /* Chrome, Safari */
 }
 </style>

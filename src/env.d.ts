@@ -6,3 +6,11 @@ declare module '*.vue' {
     export default component;
 }
 
+interface ImportMetaEnv {
+    readonly VITE_GEOAPIFY_KEY?: string;
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}
+

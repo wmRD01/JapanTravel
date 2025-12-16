@@ -258,31 +258,17 @@ export function useCloudSync(
                 await syncTripFromCloud(cloudTripId.value);
 
             if (tripData) {
-                // 優先同步 title 和 destination
+                // 優先同步 title（不再使用 destination）
                 const syncedTitle = tripData.title || (tripData.config && tripData.config.title) || '';
                 if (syncedTitle) {
                     setup.value.title = syncedTitle;
                     console.log('✅ Title 已更新（優先同步）:', syncedTitle);
-                } else {
-                    const fallbackTitle =
-                        tripData.destination || (tripData.config && tripData.config.destination) || '';
-                    if (fallbackTitle) {
-                        setup.value.title = fallbackTitle;
-                        console.log('⚠️ Title 不存在，使用 destination 作為 fallback:', fallbackTitle);
-                    }
-                }
-
-                const syncedDestination =
-                    tripData.destination || (tripData.config && tripData.config.destination) || '';
-                if (syncedDestination) {
-                    setup.value.destination = syncedDestination;
-                    console.log('✅ Destination 已更新（優先同步）:', syncedDestination);
                 }
 
                 // 更新 tripList 中的顯示
                 const trip = tripList.value.find((t) => t.id === currentTripId.value);
                 if (trip) {
-                    trip.destination = setup.value.title || setup.value.destination || trip.destination;
+                    trip.destination = setup.value.title || trip.destination;
                     saveTripList();
                 }
             }
@@ -309,23 +295,22 @@ export function useCloudSync(
                 expensesCount: processedExpenses.length,
             });
 
-            // 同步 config 中的其他設定
+            // 同步 config 中的其他設定（忽略 destination）
             if (tripData) {
                 if (tripData.config) {
                     const currentTitle = setup.value.title || '';
-                    const currentDestination = setup.value.destination || '';
+                    // 從 config 中排除 destination，避免讀取舊資料
+                    const { destination: _, ...configWithoutDestination } = tripData.config;
                     setup.value = {
                         ...setup.value,
-                        ...tripData.config,
-                        title: currentTitle || tripData.config.title || '',
-                        destination: currentDestination || tripData.config.destination || '',
+                        ...configWithoutDestination,
+                        title: currentTitle || configWithoutDestination.title || '',
                     };
                     if (tripData.config.rate !== undefined) {
                         exchangeRate.value = tripData.config.rate;
                     }
                     console.log('✅ 設定資料已更新:', {
                         title: setup.value.title,
-                        destination: setup.value.destination,
                         currency: setup.value.currency,
                     });
                 }

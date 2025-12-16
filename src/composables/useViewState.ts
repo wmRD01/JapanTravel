@@ -54,13 +54,13 @@ export function useViewState(
 
     const saveTitle = async () => {
         const newTitle = editingTitleValue.value.trim();
-        const finalTitle = newTitle;
+        const finalTitle = newTitle || '未命名旅程';
         setup.value.title = finalTitle;
         if (currentTripId.value) {
             saveToStorage(currentTripId.value, 'config', setup.value);
             const trip = tripList.value.find((t) => t.id === currentTripId.value);
             if (trip) {
-                trip.destination = finalTitle || setup.value.destination || '你的旅程?';
+                trip.destination = finalTitle;
                 saveTripList();
             }
         }

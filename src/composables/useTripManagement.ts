@@ -87,7 +87,6 @@ export function useTripManagement(
     const createNewTrip = () => {
         setup.value = {
             title: '',
-            destination: '',
             startDate: getTodayDateStr(),
             days: 5,
             rate: DEFAULT_EXCHANGE_RATE,
@@ -103,18 +102,14 @@ export function useTripManagement(
      * 初始化旅程（建立新旅程並保存）
      */
     const initTrip = () => {
-        if (!setup.value.destination) {
-            alert('請輸入國家/地點');
-            return;
-        }
-        // 如果沒有輸入標題，使用 destination 作為預設標題
-        if (!setup.value.title) {
-            setup.value.title = setup.value.destination;
+        // 如果沒有輸入標題，給預設名稱
+        if (!setup.value.title || !setup.value.title.trim()) {
+            setup.value.title = '未命名旅程';
         }
         const newId = generateId();
         const newTripMeta: TripMeta = {
             id: newId,
-            destination: setup.value.title || setup.value.destination,
+            destination: setup.value.title, // 兼容列表顯示，不再代表國家/天氣
             startDate: setup.value.startDate,
             daysCount: setup.value.days,
         };
@@ -241,11 +236,6 @@ export function useTripManagement(
         // 載入本地 config（僅在非雲端旅程，或雲端旅程同步失敗時使用）
         if (lConf && !cloudSyncSuccess) {
             setup.value = lConf;
-        }
-
-        // 統一使用 setup.value.destination 來獲取天氣
-        if (setup.value.destination) {
-            fetchWeather(setup.value.destination);
         }
 
         if (!isPersonalMode.value) {

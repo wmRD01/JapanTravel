@@ -38,10 +38,9 @@ export async function uploadTripDocument(
     }
 
     if (isUpdate && cloudTripId) {
-        // 更新現有文件
+        // 更新現有文件（不再傳遞 destination，讓雲端逐步清除舊欄位）
         await setDoc(doc(firestoreDb, 'trips', cloudTripId), {
             title: setup.title || '',
-            destination: setup.destination || '',
             startDate: setup.startDate,
             daysCount: daysCount,
             inviteCode: inviteCode,
@@ -56,10 +55,9 @@ export async function uploadTripDocument(
         });
         return cloudTripId;
     } else {
-        // 建立新文件
+        // 建立新文件（不再傳遞 destination）
         const tripRef = await addDoc(collection(firestoreDb, 'trips'), {
             title: setup.title || '',
-            destination: setup.destination || '',
             startDate: setup.startDate,
             daysCount: daysCount,
             inviteCode: inviteCode,
@@ -93,15 +91,32 @@ export async function uploadDays(cloudTripId: string, days: Day[]): Promise<void
     const daysCollection = collection(firestoreDb, `trips/${cloudTripId}/days`);
     for (let i = 0; i < days.length; i++) {
         const day = days[i];
-        await addDoc(daysCollection, {
+
+        // 避免同步天氣，並確保行程地區上傳，同時過濾 undefined 欄位
+        const sanitizedItems = (day.items || []).map((item) => {
+            const { weather, ...rest } = item; // 去除天氣欄位
+            const base = {
+                ...rest,
+                type: item.type || 'spot',
+                region: item.region || '',
+                isCountryDivider:
+                    item.type === 'country-divider' || item.isCountryDivider === true ? true : undefined,
+            };
+            return cleanUndefined(base);
+        });
+
+        const dayDoc = cleanUndefined({
             order: i,
             date: day.date || '',
             shortDate: day.shortDate || '',
             fullDate: day.fullDate || '',
             title: day.title || '',
             flight: day.flight || null,
-            items: day.items || [],
+            region: day.region || '',
+            items: sanitizedItems,
         });
+
+        await addDoc(daysCollection, dayDoc);
     }
 }
 
@@ -316,15 +331,41 @@ export async function syncTripFromCloud(cloudTripId: string): Promise<{
     const syncedDays: Day[] = [];
     daysSnapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
-        syncedDays.push({
+
+        const migratedItems = (data.items || []).map((it: any) => {
+            const {
+                weather, // 舊資料可能含天氣，移除
+                type,
+                region,
+                country,
+                countryCode,
+                isCountryDivider,
+                ...rest
+            } = it || {};
+
+            const finalType = type || 'spot';
+            const isDivider = finalType === 'country-divider' || isCountryDivider === true;
+
+            return cleanUndefined({
+                ...rest,
+                type: finalType,
+                region: region || '',
+                country: country || '',
+                countryCode: countryCode || '',
+                isCountryDivider: isDivider || undefined,
+            });
+        });
+
+        syncedDays.push(cleanUndefined({
             order: data.order,
             date: data.date,
             shortDate: data.shortDate,
             fullDate: data.fullDate,
             title: data.title,
             flight: data.flight,
-            items: data.items || [],
-        });
+            region: data.region || '',
+            items: migratedItems,
+        }));
     });
     syncedDays.sort((a, b) => (a.order || 0) - (b.order || 0));
 
@@ -349,6 +390,14 @@ export async function syncTripFromCloud(cloudTripId: string): Promise<{
         days: syncedDays,
         expenses: syncedExpenses,
     };
+}
+
+/**
+ * 移除物件中值為 undefined 的欄位，避免 Firestore 拒絕
+ */
+function cleanUndefined<T extends Record<string, any>>(obj: T): T {
+    const entries = Object.entries(obj).filter(([, v]) => v !== undefined);
+    return Object.fromEntries(entries) as T;
 }
 
 /**

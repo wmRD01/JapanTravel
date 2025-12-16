@@ -166,7 +166,7 @@ export function useInviteCode(
                 const newLocalId = generateId();
                 const newTripMeta: TripMeta = {
                     id: newLocalId,
-                    destination: tripData.title || tripData.destination || '雲端旅程',
+                    destination: tripData.title || '雲端旅程',
                     startDate: tripData.startDate || new Date().toISOString().split('T')[0],
                     daysCount: tripData.daysCount || 0,
                     isCloudTrip: true,
@@ -190,18 +190,14 @@ export function useInviteCode(
                     ((tripData.config && tripData.config.rate) || DEFAULT_EXCHANGE_RATE).toString()
                 );
 
-                // 確保 config 包含 title 和 destination
+                // 確保 config 包含 title（不再使用 destination）
                 const syncedTitle =
                     tripData.title ||
                     (tripData.config && tripData.config.title) ||
-                    tripData.destination ||
                     '雲端旅程';
-                const syncedDestination =
-                    tripData.destination || (tripData.config && tripData.config.destination) || 'Tokyo';
                 const defaultConfig = {
                     ...tripData.config,
                     title: syncedTitle,
-                    destination: syncedDestination,
                 };
                 saveToStorage(newLocalId, 'config', defaultConfig);
 

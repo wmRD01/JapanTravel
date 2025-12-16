@@ -30,12 +30,16 @@ export interface DayWeather {
 
 export interface DayItem {
     time: string;
-    type: 'spot' | 'food' | 'shop' | 'transport' | 'flight';
+    type: 'spot' | 'food' | 'shop' | 'transport' | 'flight' | 'country-divider';
     activity: string;
     location: string;
     note: string;
     region?: string; // 該旅程項目的地區設定
     weather?: DayWeather; // 該旅程項目的天氣資料
+    // 國家區塊專用欄位
+    country?: string; // 國家名稱（如：日本）
+    countryCode?: string; // 國家代碼（如：JP）
+    isCountryDivider?: boolean; // 標記為國家區塊
 }
 
 export interface Flight {
@@ -72,7 +76,6 @@ export interface SettlementPlan {
 // 設定相關類型
 export interface Setup {
     title: string;
-    destination: string;
     startDate: string;
     days: number;
     rate: number;
@@ -104,7 +107,7 @@ export interface WeatherDisplay {
     isForecast: boolean;
 }
 
-// 推薦相關類型
+// 推薦相關類型（Geoapify 餐廳）
 export interface Recommendation {
     name: string;
     location: string;
