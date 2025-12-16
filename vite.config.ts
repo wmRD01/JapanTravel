@@ -2,7 +2,14 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-    plugins: [vue()],
+    plugins: [
+        vue({
+            script: {
+                defineModel: true,
+                propsDestructure: true,
+            },
+        }),
+    ],
     base: './',             // 若要相對路徑部署可加這行
     resolve: {
         alias: {

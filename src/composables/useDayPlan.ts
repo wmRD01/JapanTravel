@@ -214,6 +214,32 @@ export function useDayPlan(
         }
     };
 
+    // Helper 函數
+    const getItemKey = (item: DayItem, idx: number) =>
+        `${item.time || 'no-time'}-${item.activity || 'item'}-${idx}`;
+
+    const getTimePeriod = (t: string): string => {
+        if (!t) return '';
+        const hour = parseInt(t.split(':')[0]);
+        if (hour >= 5 && hour < 12) return '上午';
+        if (hour >= 12 && hour < 18) return '下午';
+        if (hour >= 18 && hour < 22) return '晚上';
+        return '深夜';
+    };
+
+    const getGoogleMapLink = (loc: string): string => {
+        return loc ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}` : '#';
+    };
+
+    const getDotColor = (t: string) =>
+        t === 'food'
+            ? 'bg-orange-400'
+            : t === 'shop'
+                ? 'bg-pink-400'
+                : t === 'flight'
+                    ? 'bg-blue-500'
+                    : 'bg-teal-500';
+
     return {
         // Day 操作
         currentDay,
@@ -248,6 +274,11 @@ export function useDayPlan(
         checkAndInsertCountryDivider,
         // 航班操作
         toggleFlightCard,
+        // Helper 函數
+        getItemKey,
+        getTimePeriod,
+        getGoogleMapLink,
+        getDotColor,
     };
 }
 

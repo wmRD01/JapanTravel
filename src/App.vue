@@ -1,8 +1,251 @@
-<template src="./App.template.html"></template>
+<template>
+    <div id="app"
+        class="flex flex-col min-h-screen max-w-md mx-auto w-full bg-white shadow-2xl relative sm:rounded-xl sm:my-4 sm:min-h-[95vh] sm:max-h-[95vh] sm:overflow-hidden sm:border-4 sm:border-slate-100">
+        <!-- Header -->
+        <AppHeader :title="setup.title" :view-mode="viewMode" :current-day-idx="currentDayIdx" :days="days"
+            :is-cloud-trip="isCloudTrip" :invite-code="inviteCode" :get-day-key="getDayKey"
+            @show-trip-menu="showTripMenu = true" @start-edit-title="startEditTitle" @copy-invite-code="copyInviteCode"
+            @update:viewMode="viewMode = $event" @update:currentDayIdx="currentDayIdx = $event" @add-day="addDay" />
+
+        <!-- 編輯標題 Modal -->
+        <EditTitleModal :open="isEditingTitle" :editing-value="editingTitleValue"
+            @update:editingValue="editingTitleValue = $event" @close="closeEditModal" @save="saveTitle" />
+
+        <!-- 編輯備註 Modal -->
+        <NoteEditModal :open="isEditingNote" :value="editingNoteValue" @update:value="editingNoteValue = $event"
+            @close="closeEditNote" @save="saveNote" />
+
+        <!-- 新增/插入國家分隔區塊模態框 -->
+        <CountryDividerModal :open="isEditingCountryDivider || insertCountryDividerIndex >= 0"
+            :is-editing="!!editingCountryDivider" :country-name="editingCountryName" :country-code="editingCountryCode"
+            :show-insert-position="insertCountryDividerIndex >= 0" :items="currentDay.items"
+            :selected-insert-index="insertCountryDividerIndex" :get-item-key="getItemKey"
+            @update:countryName="editingCountryName = $event" @update:countryCode="editingCountryCode = $event"
+            @select-insert-position="insertCountryDividerIndex = $event" @close="closeCountryDividerModal"
+            @save="saveCountryDivider" />
+
+        <!-- 初始設定視窗 / 建立新旅程 -->
+        <div v-if="showSetupModal"
+            class="fixed inset-0 bg-teal-800/90 backdrop-blur-sm z-[80] flex items-center justify-center p-6">
+            <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="ph-duotone ph-airplane-tilt text-3xl text-teal-600"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-800">建立新旅程</h2>
+                    <p class="text-sm text-slate-400">簡單幾步，開始規劃您的冒險！</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">旅遊標題</label>
+                        <input v-model="setup.title" type="text" placeholder="例如: 日本東京自由行"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:ring-2 focus:ring-teal-500 font-bold" />
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">開始日期</label>
+                            <input v-model="setup.startDate" type="date"
+                                class="h-12 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-slate-700 focus:ring-2 focus:ring-teal-500 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">天數</label>
+                            <input v-model.number="setup.days" type="number" min="1" max="30"
+                                class="h-12 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-slate-700 focus:ring-2 focus:ring-teal-500 text-center font-bold" />
+                        </div>
+                    </div>
+                    <button @click="initTrip"
+                        class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow-lg transform active:scale-95 transition flex items-center justify-center gap-2 mt-2">
+                        開始規劃 <i class="ph-bold ph-arrow-right"></i>
+                    </button>
+                    <button v-if="tripList.length>0" @click="showSetupModal = false"
+                        class="w-full text-slate-400 text-xs py-2 hover:text-slate-600">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 relative main-surface sm:overflow-y-auto sm:overflow-x-hidden min-h-0 hide-scrollbar">
+            <!-- 行程表 (Plan View) -->
+            <transition name="fade" mode="out-in">
+                <PlanView v-if="viewMode === 'plan'" :current-day="currentDay" :current-day-idx="currentDayIdx"
+                    :is-day-weather-loading="isDayWeatherLoading" :is-item-weather-loading="isItemWeatherLoading"
+                    :item-weather-display="(item) => itemWeatherDisplay(item, currentDay)"
+                    :get-time-period="getTimePeriod" :get-google-map-link="getGoogleMapLink"
+                    :get-dot-color="getDotColor" :get-item-key="getItemKey" :is-searching-recs="isSearchingRecs"
+                    :search-target-index="searchTargetIndex" :recommendations-map="recommendationsMap"
+                    @toggle-flight-card="toggleFlightCard" @update:flight="(flight) => currentDay.flight = flight"
+                    @reload-day-weather="reloadDayWeather"
+                    @show-insert-country-divider-modal="showInsertCountryDividerModal" @move-item-up="moveItemUp"
+                    @move-item-down="moveItemDown" @start-edit-country-divider="startEditCountryDivider"
+                    @remove-country-divider="removeCountryDivider"
+                    @update:item="({ idx, field, value }) => { currentDay.items[idx][field] = value; }"
+                    @start-edit-note="startEditNote"
+                    @item-region-change="(item) => onItemRegionChange(item, currentDay)"
+                    @clear-item-region="clearItemRegion" @remove-item="removeItem" @add-item="addItem"
+                    @remove-current-day="removeCurrentDay" @search-nearby="searchNearby"
+                    @apply-recommendation="applyRecommendation" />
+            </transition>
+
+            <!-- 地圖視圖 -->
+            <MapView v-if="viewMode === 'map'" :is-map-loading="isMapLoading" :location-count="currentDayLocationCount"
+                @reload-map="initMap" @center-on-user="centerOnUser" />
+
+            <!-- 分帳視圖 -->
+            <MoneyView v-if="viewMode === 'money'" :is-personal-mode="isPersonalMode" :currency="setup.currency"
+                :exchange-rate="exchangeRate" :currency-label="currencyLabel" :currency-symbol="currencySymbol"
+                :total-expense="totalExpense" :total-expense-in-t-w-d="totalExpenseInTWD"
+                :participants-str="participantsStr" :participants="participants" :paid-by-person="paidByPerson"
+                :owed-by-person="owedByPerson" :settlement-plan="settlementPlan" :new-expense="newExpense"
+                :current-expenses="currentExpenses" :get-settlement-key="getSettlementKey"
+                :get-expense-key="getExpenseKey" @toggle-personal-mode="isPersonalMode = !isPersonalMode"
+                @currency-change="fetchRateByCurrency" @update:exchangeRate="exchangeRate = $event"
+                @update-participants="(value: string) => { participantsStr = value; updateParticipants(); }"
+                @update:newExpense="newExpense = $event" @select-all-splits="selectAllSplits" @add-expense="addExpense"
+                @remove-expense="removeExpense" />
+
+            <!-- 翻譯功能 -->
+            <TranslateView
+                v-if="viewMode === 'translate'"
+                :lang-code="setup.langCode"
+                :lang-name="setup.langName"
+            />
+        </main>
+
+        <!-- 側邊欄 (旅程選單) -->
+        <TripSidebar :open="showTripMenu" :trip-list="tripList" :current-trip-id="currentTripId"
+            :is-uploading="isUploading" :is-syncing="isSyncing" :get-trip-cloud-status="getTripCloudStatus"
+            @close="showTripMenu = false" @create-trip="createNewTrip" @show-template="showTemplatePreview = true"
+            @switch-trip="switchTrip" @upload="handleUploadToCloud" @sync="handleSyncFromCloud"
+            @invite="handleShowInviteModal" @delete-trip="handleDeleteTrip" @clear-local="handleClearAllLocalStorage" />
+
+        <!-- 預設行程模板預覽模態框 -->
+        <div v-if="showTemplatePreview"
+            class="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in">
+            <div
+                class="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl relative flex flex-col overflow-hidden">
+                <!-- 標題區 -->
+                <div
+                    class="bg-gradient-to-r from-pink-500 via-orange-500 to-yellow-500 p-6 text-white relative overflow-hidden">
+                    <div class="absolute inset-0 opacity-20">
+                        <div class="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
+                        <div class="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
+                    </div>
+                    <div class="relative z-10 flex justify-between items-start">
+                        <div>
+                            <h2 class="text-2xl font-bold mb-1 flex items-center gap-2">
+                                <i class="ph-bold ph-sparkle"></i>
+                                日本東京富士行程模板
+                            </h2>
+                            <p class="text-white/90 text-sm">{{ JP_TRIP_DATA.length }} 天精彩行程</p>
+                        </div>
+                        <button @click="showTemplatePreview = false"
+                            class="text-white/80 hover:text-white hover:bg-white/20 rounded-full p-1 transition">
+                            <i class="ph-bold ph-x text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 內容區（可滾動） -->
+                <div class="flex-1 overflow-y-auto p-6 space-y-4 hide-scroll">
+                    <!-- 行程概覽 -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                            <i class="ph-bold ph-calendar-check text-teal-600"></i>
+                            行程概覽
+                        </h3>
+                        <div class="grid grid-cols-1 gap-3">
+                            <div v-for="(day, idx) in JP_TRIP_DATA" :key="idx"
+                                class="bg-gradient-to-r from-slate-50 to-white p-4 rounded-xl border border-slate-200 hover:border-teal-300 transition-all">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div>
+                                        <div class="font-bold text-slate-800">{{ day.date }}</div>
+                                        <div class="text-sm text-teal-600 font-medium">{{ day.title }}</div>
+                                    </div>
+                                    <div class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                                        {{ day.items.length }} 個活動
+                                    </div>
+                                </div>
+                                <div class="text-xs text-slate-500 mt-2 line-clamp-2">
+                                    {{ day.items.slice(0, 2).map(i => i.activity).join(' • ') }}
+                                    <span v-if="day.items.length > 2">...</span>
+                                </div>
+                                <div v-if="day.flight" class="mt-2 flex items-center gap-1 text-xs text-blue-600">
+                                    <i class="ph-bold ph-airplane"></i>
+                                    <span>{{ day.flight.type === 'arrival' ? '抵達' : '出發' }}航班</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 預設支出 -->
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+                            <i class="ph-bold ph-currency-dollar text-green-600"></i>
+                            預設支出項目
+                        </h3>
+                        <div class="bg-slate-50 rounded-xl p-4 space-y-2">
+                            <div v-for="(exp, idx) in JP_EXPENSES" :key="idx"
+                                class="flex justify-between items-center text-sm">
+                                <span class="text-slate-700">{{ exp.item }}</span>
+                                <span class="font-bold text-slate-800">¥{{ exp.amount.toLocaleString() }}</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-200 mt-2 flex justify-between items-center font-bold">
+                                <span class="text-slate-800">總計</span>
+                                <span class="text-teal-600">
+                                    ¥{{ JP_EXPENSES.reduce((sum, e) => sum + e.amount, 0).toLocaleString() }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按鈕區 -->
+                <div class="border-t border-slate-200 p-6 bg-slate-50 space-y-3">
+                    <div class="flex gap-3">
+                        <button @click="loadTemplateAsNew" :disabled="isLoadingTemplate"
+                            class="flex-1 bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-600 hover:to-orange-600 text-white font-bold py-3 rounded-xl shadow-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none flex items-center justify-center gap-2">
+                            <i v-if="isLoadingTemplate" class="ph-bold ph-spinner animate-spin"></i>
+                            <i v-else class="ph-bold ph-plus-circle"></i>
+                            創建新行程
+                        </button>
+                        <button v-if="currentTripId" @click="loadTemplateToCurrent" :disabled="isLoadingTemplate"
+                            class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all transform hover:scale-105 disabled:opacity-50 disabled:transform-none flex items-center justify-center gap-2">
+                            <i v-if="isLoadingTemplate" class="ph-bold ph-spinner animate-spin"></i>
+                            <i v-else class="ph-bold ph-arrow-down"></i>
+                            載入到當前行程
+                        </button>
+                    </div>
+                    <button @click="showTemplatePreview = false"
+                        class="w-full text-slate-400 text-sm py-2 hover:text-slate-600 transition">
+                        取消
+                    </button>
+                </div>
+            </div>
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm -z-10" @click="showTemplatePreview = false"></div>
+        </div>
+
+        <!-- 邀請碼模態框 -->
+        <InviteModal :open="showInviteModal" :invite-code="inviteCode" :invite-link="inviteLink"
+            @close="showInviteModal = false" @copy-invite-code="copyInviteCode" @copy-invite-link="copyInviteLink" />
+    </div>
+</template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { JP_EXPENSES, JP_TRIP_DATA, JP_TRIP_ID } from '../data/trip-data';
+import AppHeader from './components/layout/AppHeader.vue';
+import CountryDividerModal from './components/modals/CountryDividerModal.vue';
+import EditTitleModal from './components/modals/EditTitleModal.vue';
+import InviteModal from './components/modals/InviteModal.vue';
+import NoteEditModal from './components/modals/NoteEditModal.vue';
+import TemplatePreviewModal from './components/modals/TemplatePreviewModal.vue';
+import MoneyView from './components/money/MoneyView.vue';
+import MapView from './components/plan/MapView.vue';
+import PlanView from './components/plan/PlanView.vue';
+import TripSidebar from './components/sidebar/TripSidebar.vue';
+import TranslateView from './components/translate/TranslateView.vue';
 import { useCloudExpenses } from './composables/useCloudExpenses';
 import { useCloudSync } from './composables/useCloudSync';
 import { useDayPlan } from './composables/useDayPlan';
@@ -22,10 +265,6 @@ import { formatDate } from './utils/date';
 import { getExpenseSplitAmount } from './utils/expense';
 import { getStorageKey } from './utils/storage';
 import { getWeatherIcon } from './utils/weather';
-import PlanView from './components/PlanView.vue';
-import MoneyView from './components/MoneyView.vue';
-import TranslateView from './components/TranslateView.vue';
-import TripSidebar from './components/TripSidebar.vue';
 
 // 基礎狀態
 const days = ref<Day[]>([]);
@@ -45,16 +284,7 @@ const newExpense = ref({
     splitParticipants: [] as string[]
 });
 const timeInputRefs = ref<Record<string, HTMLInputElement>>({});
-const isEditingNote = ref(false);
-const editingNoteValue = ref('');
-const editingNoteTarget = ref<DayItem | null>(null);
-
-// 國家區塊編輯/插入狀態
-const isEditingCountryDivider = ref(false);
-const editingCountryDivider = ref<DayItem | null>(null);
-const editingCountryName = ref('');
-const editingCountryCode = ref('');
-const insertCountryDividerIndex = ref(-1); // 插入位置索引
+// Note 和國家區塊編輯狀態已移至 useDayPlan composable
 const tripList = ref<TripMeta[]>([]);
 const currentTripId = ref<string | null>(null);
 const setup = ref({
@@ -178,6 +408,36 @@ const searchNearby = (item: any, idx: number) => searchNearbyRec(item, idx, curr
 // 使用 useDayPlan composable
 const dayPlan = useDayPlan(days, currentDayIdx);
 
+// 從 dayPlan 獲取所有相關狀態和函數
+const {
+    isEditingNote,
+    editingNoteValue,
+    startEditNote,
+    closeEditNote,
+    saveNote,
+    isEditingCountryDivider,
+    editingCountryDivider,
+    editingCountryName,
+    editingCountryCode,
+    insertCountryDividerIndex,
+    addDay,
+    removeCurrentDay,
+    addItem,
+    removeItem,
+    moveItemUp,
+    moveItemDown,
+    showInsertCountryDividerModal,
+    startEditCountryDivider,
+    closeCountryDividerModal,
+    saveCountryDivider,
+    removeCountryDivider,
+    toggleFlightCard,
+    getTimePeriod,
+    getGoogleMapLink,
+    getDotColor,
+    getItemKey,
+} = dayPlan;
+
 // 使用 useWeather composable
 const {
     isItemWeatherLoading,
@@ -219,8 +479,7 @@ const updateParticipants = () => {
 // Day / DayItem / Expense / SettlementPlan 的穩定 key 生成
 const getDayKey = (day: Day, index: number) => day.fullDate || day.date || `day-${index}`;
 
-const getItemKey = (item: DayItem, idx: number) =>
-    `${item.time || 'no-time'}-${item.activity || 'item'}-${idx}`;
+// getItemKey 已移至 useDayPlan composable
 
 const getSettlementKey = (plan: SettlementPlan, idx: number) =>
     `${plan.from}-${plan.to}-${plan.amount}-${idx}`;
@@ -234,6 +493,11 @@ const jpExpensesTotal = computed(() =>
     JP_EXPENSES.reduce((sum, e) => sum + e.amount, 0)
 );
 
+// 當前天的地點數量（用於地圖視圖）
+const currentDayLocationCount = computed(() =>
+    currentDay.value.items.filter((i) => i.location).length
+);
+
 const updateDate = (e: any, day: any) => {
     const val = e.target.value;
     if (!val) return;
@@ -242,41 +506,9 @@ const updateDate = (e: any, day: any) => {
     Object.assign(day, formatted);
 };
 
-// 編輯備註
-const startEditNote = (item: DayItem) => {
-    editingNoteTarget.value = item;
-    editingNoteValue.value = item.note || '';
-    isEditingNote.value = true;
-};
+// 編輯備註相關函數已移至 useDayPlan composable，使用 dayPlan 的函數
 
-const closeEditNote = () => {
-    isEditingNote.value = false;
-    editingNoteTarget.value = null;
-    editingNoteValue.value = '';
-};
-
-const saveNote = () => {
-    if (editingNoteTarget.value) {
-        editingNoteTarget.value.note = editingNoteValue.value?.trim() || '';
-    }
-    closeEditNote();
-};
-
-const toggleFlightCard = () => {
-    if (currentDay.value.flight) {
-        if (confirm('移除航班?')) currentDay.value.flight = null;
-    } else {
-        currentDay.value.flight = {
-            type: 'arrival',
-            startTime: '10:00',
-            startAirport: 'TPE',
-            number: 'FLIGHT',
-            endTime: '14:00',
-            endAirport: 'DEST',
-            arrivalOffset: 0,
-        };
-    }
-};
+// toggleFlightCard 已移至 useDayPlan composable
 
 // fetchDayWeather 已移至 useWeather composable，此處保留用於向後兼容（如果需要）
 
@@ -327,7 +559,7 @@ const dayWeatherDisplay = (day: Day) => {
         icon: day.weather.icon || 'ph-sun',
         label: `${location} (目前)`,
         isForecast: false,
-    };
+        };
 };
 
 // 天氣相關函數已移至 useWeather composable
@@ -375,22 +607,11 @@ const getCountryFlag = (countryCode: string | undefined): string => {
     return flagMap[code] || '🏳️';
 };
 
-// 國家區塊相關函數已移至 useDayPlan composable，使用 dayPlan 的函數
-const showInsertCountryDividerModal = dayPlan.showInsertCountryDividerModal;
-const startEditCountryDivider = dayPlan.startEditCountryDivider;
-const closeCountryDividerModal = dayPlan.closeCountryDividerModal;
-const saveCountryDivider = dayPlan.saveCountryDivider;
+// 國家區塊相關函數已從 dayPlan 解構獲取
 
 // 天氣相關函數已移至 useWeather composable
 
-const getDotColor = (t: string) =>
-    t === 'food'
-        ? 'bg-orange-400'
-        : t === 'shop'
-            ? 'bg-pink-400'
-            : t === 'flight'
-                ? 'bg-blue-500'
-                : 'bg-teal-500';
+// getDotColor 已移至 useDayPlan composable
 
 const openTimePicker = (refKey: string) => {
     const timeInput = timeInputRefs.value[refKey];
@@ -411,42 +632,13 @@ const openTimePickerFromEvent = (event: Event) => {
     }
 };
 
-const addItem = () => {
-    currentDay.value.items.push({
-        time: '',
-        type: 'spot',
-        activity: '',
-        location: '',
-        note: '',
-    });
-};
-
-const removeItem = (idx: number) => {
-    currentDay.value.items.splice(idx, 1);
-};
+// addItem, removeItem 已移至 useDayPlan composable
 
 // ========== 國家區塊相關功能 ==========
 
-// 國家區塊相關函數已移至 useDayPlan composable
+// 國家區塊相關函數已從 dayPlan 解構獲取
 
-// 刪除國家區塊已移至 useDayPlan composable
-const removeCountryDivider = dayPlan.removeCountryDivider;
-
-// 移動項目（上移）
-const moveItemUp = (idx: number) => {
-    if (idx <= 0) return; // 已經是最上面，無法上移
-    const items = currentDay.value.items;
-    // 交換位置
-    [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
-};
-
-// 移動項目（下移）
-const moveItemDown = (idx: number) => {
-    const items = currentDay.value.items;
-    if (idx >= items.length - 1) return; // 已經是最下面，無法下移
-    // 交換位置
-    [items[idx], items[idx + 1]] = [items[idx + 1], items[idx]];
-};
+// moveItemUp, moveItemDown 已移至 useDayPlan composable
 
 // 檢查是否需要插入國家區塊（自動插入邏輯）
 const checkAndInsertCountryDivider = async (item: DayItem, itemIndex: number, day: Day, country: string, countryCode: string) => {
@@ -462,36 +654,11 @@ const checkAndInsertCountryDivider = async (item: DayItem, itemIndex: number, da
     return false; // 不需要插入
 };
 
-const addDay = () => {
-    days.value.push({
-        date: `Day ${days.value.length + 1}`,
-        shortDate: '',
-        fullDate: '',
-        title: '',
-        items: [],
-        flight: null,
-    });
-};
-
-const removeCurrentDay = () => {
-    if (days.value.length > 1 && confirm('刪除?')) {
-        days.value.splice(currentDayIdx.value, 1);
-    }
-};
+// addDay, removeCurrentDay 已移至 useDayPlan composable
 
 const getExpenseSplitAmountWrapper = (expense: any) => {
     return getExpenseSplitAmount(expense, isPersonalMode.value, participants.value);
 };
-
-// 工具函數：暴露給模板使用
-const getTimePeriod = (t: string): string => {
-    if (!t) return '';
-    const h = parseInt(t.split(':')[0]);
-    return h < 5 ? '凌晨' : h < 11 ? '上午' : h < 14 ? '中午' : h < 18 ? '下午' : '晚上';
-};
-
-const getGoogleMapLink = (loc: string): string =>
-    loc ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc)}` : '#';
 
 // 初始化雲端相關（先創建臨時函數）
 let setupExpensesRealtimeListener: (() => Promise<void>) | null = null;
