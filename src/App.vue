@@ -57,7 +57,7 @@
                         class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow-lg transform active:scale-95 transition flex items-center justify-center gap-2 mt-2">
                         開始規劃 <i class="ph-bold ph-arrow-right"></i>
                     </button>
-                    <button v-if="tripList.length>0" @click="showSetupModal = false"
+                    <button v-if="tripList.length > 0" @click="showSetupModal = false"
                         class="w-full text-slate-400 text-xs py-2 hover:text-slate-600">
                         取消
                     </button>
@@ -69,14 +69,16 @@
         <main class="flex-1 relative main-surface sm:overflow-y-auto sm:overflow-x-hidden min-h-0 hide-scrollbar">
             <!-- 行程表 (Plan View) -->
             <transition name="fade" mode="out-in">
+                <!-- 美食推薦相關 props - 已移除前端功能，保留程式碼 -->
+                <!-- :is-searching-recs="isSearchingRecs" -->
+                <!-- :search-target-index="searchTargetIndex" -->
+                <!-- :recommendations-map="recommendationsMap" -->
                 <PlanView v-if="viewMode === 'plan'" :current-day="currentDay" :current-day-idx="currentDayIdx"
                     :is-day-weather-loading="isDayWeatherLoading" :is-item-weather-loading="isItemWeatherLoading"
                     :item-weather-display="(item) => itemWeatherDisplay(item, currentDay)"
                     :get-time-period="getTimePeriod" :get-google-map-link="getGoogleMapLink"
-                    :get-dot-color="getDotColor" :get-item-key="getItemKey" :is-searching-recs="isSearchingRecs"
-                    :search-target-index="searchTargetIndex" :recommendations-map="recommendationsMap"
-                    @toggle-flight-card="toggleFlightCard" @update:flight="(flight) => currentDay.flight = flight"
-                    @reload-day-weather="reloadDayWeather"
+                    :get-dot-color="getDotColor" :get-item-key="getItemKey" @toggle-flight-card="toggleFlightCard"
+                    @update:flight="(flight) => currentDay.flight = flight" @reload-day-weather="reloadDayWeather"
                     @show-insert-country-divider-modal="showInsertCountryDividerModal" @move-item-up="moveItemUp"
                     @move-item-down="moveItemDown" @start-edit-country-divider="startEditCountryDivider"
                     @remove-country-divider="removeCountryDivider"
@@ -84,8 +86,10 @@
                     @start-edit-note="startEditNote"
                     @item-region-change="(item) => onItemRegionChange(item, currentDay)"
                     @clear-item-region="clearItemRegion" @remove-item="removeItem" @add-item="addItem"
-                    @remove-current-day="removeCurrentDay" @search-nearby="searchNearby"
-                    @apply-recommendation="applyRecommendation" />
+                    @remove-current-day="removeCurrentDay" />
+                <!-- 美食推薦相關事件 - 已移除前端功能，保留程式碼 -->
+                <!-- @search-nearby="searchNearby" -->
+                <!-- @apply-recommendation="applyRecommendation" -->
             </transition>
 
             <!-- 地圖視圖 -->
@@ -106,11 +110,7 @@
                 @remove-expense="removeExpense" />
 
             <!-- 翻譯功能 -->
-            <TranslateView
-                v-if="viewMode === 'translate'"
-                :lang-code="setup.langCode"
-                :lang-name="setup.langName"
-            />
+            <TranslateView v-if="viewMode === 'translate'" :lang-code="setup.langCode" :lang-name="setup.langName" />
         </main>
 
         <!-- 側邊欄 (旅程選單) -->
@@ -168,7 +168,7 @@
                                     </div>
                                 </div>
                                 <div class="text-xs text-slate-500 mt-2 line-clamp-2">
-                                    {{ day.items.slice(0, 2).map(i => i.activity).join(' • ') }}
+                                    {{day.items.slice(0, 2).map(i => i.activity).join(' • ')}}
                                     <span v-if="day.items.length > 2">...</span>
                                 </div>
                                 <div v-if="day.flight" class="mt-2 flex items-center gap-1 text-xs text-blue-600">
@@ -191,10 +191,11 @@
                                 <span class="text-slate-700">{{ exp.item }}</span>
                                 <span class="font-bold text-slate-800">¥{{ exp.amount.toLocaleString() }}</span>
                             </div>
-                            <div class="pt-2 border-t border-slate-200 mt-2 flex justify-between items-center font-bold">
+                            <div
+                                class="pt-2 border-t border-slate-200 mt-2 flex justify-between items-center font-bold">
                                 <span class="text-slate-800">總計</span>
                                 <span class="text-teal-600">
-                                    ¥{{ JP_EXPENSES.reduce((sum, e) => sum + e.amount, 0).toLocaleString() }}
+                                    ¥{{JP_EXPENSES.reduce((sum, e) => sum + e.amount, 0).toLocaleString()}}
                                 </span>
                             </div>
                         </div>
@@ -229,6 +230,9 @@
         <!-- 邀請碼模態框 -->
         <InviteModal :open="showInviteModal" :invite-code="inviteCode" :invite-link="inviteLink"
             @close="showInviteModal = false" @copy-invite-code="copyInviteCode" @copy-invite-link="copyInviteLink" />
+
+        <!-- 全局 Loading Overlay -->
+        <LoadingOverlay :show="overlayShow" :title="loadingTitle" :message="loadingMessage" :icon="loadingIcon" />
     </div>
 </template>
 
@@ -240,12 +244,12 @@ import CountryDividerModal from './components/modals/CountryDividerModal.vue';
 import EditTitleModal from './components/modals/EditTitleModal.vue';
 import InviteModal from './components/modals/InviteModal.vue';
 import NoteEditModal from './components/modals/NoteEditModal.vue';
-import TemplatePreviewModal from './components/modals/TemplatePreviewModal.vue';
 import MoneyView from './components/money/MoneyView.vue';
 import MapView from './components/plan/MapView.vue';
 import PlanView from './components/plan/PlanView.vue';
 import TripSidebar from './components/sidebar/TripSidebar.vue';
 import TranslateView from './components/translate/TranslateView.vue';
+import LoadingOverlay from './components/ui/LoadingOverlay.vue';
 import { useCloudExpenses } from './composables/useCloudExpenses';
 import { useCloudSync } from './composables/useCloudSync';
 import { useDayPlan } from './composables/useDayPlan';
@@ -366,21 +370,39 @@ detectRateRef.value = detectRate;
 fetchWeatherRef.value = fetchWeather;
 
 // 匯率：依幣別自動抓取（用於分帳設定）
+// 選擇幣別後：
+// 1. 自動抓取「該幣別 → TWD」的匯率
+// 2. 更新整個頁面的幣別顯示（currencyLabel / currencySymbol）
+// 3. 僅更新匯率與顯示，不修改任何既有記帳金額
 const fetchRateByCurrency = async (currencyCode: string) => {
     if (!currencyCode) return;
+
+    // 先更新旅程的幣別設定，讓畫面上的符號與標籤立刻切換
+    setup.value.currency = currencyCode;
+
     isRateLoading.value = true;
     try {
         if (currencyCode === 'TWD') {
+            // 新台幣作為基準，不需要換算，1:1
+            exchangeRate.value = 1;
             setup.value.rate = 1;
             return;
         }
+
         const rRes = await fetch(`https://api.exchangerate-api.com/v4/latest/${currencyCode}`);
         const rData = await rRes.json();
-        if (rData && rData.rates && rData.rates.TWD) {
-            setup.value.rate = rData.rates.TWD;
+        const rateToTWD = rData && rData.rates && rData.rates.TWD;
+
+        if (rateToTWD && typeof rateToTWD === 'number') {
+            // 僅更新匯率，用於將目前金額換算成 TWD 顯示
+            exchangeRate.value = rateToTWD;
+            setup.value.rate = rateToTWD;
+        } else {
+            console.warn('找不到對 TWD 的匯率，保留原本匯率');
         }
     } catch (e) {
         console.error('匯率抓取失敗', e);
+        // 失敗時保留原本的 exchangeRate，不動既有顯示
     } finally {
         isRateLoading.value = false;
     }
@@ -394,7 +416,7 @@ const { isMapLoading, userLocation, initMap, centerOnUser } = useMapView(
     newExpense
 );
 
-// 推薦系統（Geoapify）
+// 推薦系統（Geoapify）- 已移除前端功能，保留程式碼
 const {
     recommendationsMap,
     isSearchingRecs,
@@ -403,7 +425,7 @@ const {
     applyRecommendation,
 } = useRecommendations();
 
-const searchNearby = (item: any, idx: number) => searchNearbyRec(item, idx, currentDayIdx.value);
+// const searchNearby = (item: any, idx: number) => searchNearbyRec(item, idx, currentDayIdx.value);
 
 // 使用 useDayPlan composable
 const dayPlan = useDayPlan(days, currentDayIdx);
@@ -559,7 +581,7 @@ const dayWeatherDisplay = (day: Day) => {
         icon: day.weather.icon || 'ph-sun',
         label: `${location} (目前)`,
         isForecast: false,
-        };
+    };
 };
 
 // 天氣相關函數已移至 useWeather composable
@@ -695,6 +717,7 @@ expensesUnsubscribe = cloudExpensesComposable.unsubscribe;
 const {
     loadTripList,
     saveTripList,
+    isLoadingTrip,
     createNewTrip,
     initTrip,
     deleteTrip,
@@ -728,6 +751,31 @@ const {
     JP_TRIP_DATA,
     JP_EXPENSES
 );
+
+// Loading Overlay 的動態內容
+// 規則：
+// - 讀取旅程 / 上傳雲端 / 從雲端同步 時顯示 Loading
+// - 但在「分帳視圖」(viewMode === 'money') 下，不顯示 Loading
+const overlayShow = computed(
+    () =>
+        viewMode.value !== 'money' &&
+        (isUploading.value || isSyncing.value || isLoadingTrip.value)
+);
+const loadingTitle = computed(() => {
+    if (isUploading.value) return '上傳資料中';
+    if (isSyncing.value || isLoadingTrip.value) return '資料同步中';
+    return '處理中';
+});
+const loadingMessage = computed(() => {
+    if (isUploading.value) return '正在將旅程資料上傳到雲端，請稍候...';
+    if (isSyncing.value || isLoadingTrip.value) return '正在同步旅程資料，請稍候...';
+    return '請稍候...';
+});
+const loadingIcon = computed(() => {
+    if (isUploading.value) return 'ph-bold ph-cloud-arrow-up text-xl animate-bounce';
+    if (isSyncing.value || isLoadingTrip.value) return 'ph-bold ph-arrows-clockwise text-xl animate-spin';
+    return 'ph-bold ph-spinner text-xl animate-spin';
+});
 
 // 更新 saveTripListRef
 saveTripListRef.value = saveTripList;
@@ -892,7 +940,6 @@ const handleSyncFromCloud = async (tripId: string) => {
         // 回退到舊的實現
         await syncFromCloud();
     }
-    alert('同步完成！');
 };
 
 const handleShowInviteModal = async (tripId: string) => {

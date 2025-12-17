@@ -190,14 +190,9 @@ export function useCloudSync(
             // 設定即時監聽器
             await setupExpensesRealtimeListener();
 
-            // 前景手動上傳時才顯示提示與自動複製邀請連結
-            if (!silent) {
-                alert('上傳成功！');
-
-                // 如果是第一次上傳，自動複製邀請連結並提示
-                if (wasFirstUpload) {
-                    await copyInviteLink();
-                }
+            // 前景手動上傳時，如果是第一次上傳，自動複製邀請連結（不彈成功提示，僅錯誤時提示）
+            if (!silent && wasFirstUpload) {
+                await copyInviteLink();
             }
         } catch (error: any) {
             // 如果是因為取消而失敗，不顯示錯誤訊息

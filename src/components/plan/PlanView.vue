@@ -8,43 +8,47 @@
                     style="background: #666666"></div>
                 <div class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full z-10"
                     style="background: #666666"></div>
-                <div class="p-4 relative z-0">
+                <div class="px-4 pt-4 pb-3 relative z-0 space-y-3">
                     <button @click="$emit('toggle-flight-card')"
                         class="absolute top-2 right-2 text-white/50 hover:text-white hover:bg-white/20 rounded-full p-1 transition">
                         <i class="ph-bold ph-x"></i>
                     </button>
-                    <div class="flex justify-between items-center mb-1 pt-2">
-                        <!-- 出發 -->
-                        <div class="flex flex-col items-center w-1/3">
+                    <!-- 上排：時間與航班號 -->
+                    <div class="flex justify-between items-stretch gap-3">
+                        <!-- 出發時間 -->
+                        <div class="flex flex-col items-start w-1/3 gap-1">
+                            <span class="text-[10px] uppercase tracking-widest opacity-80">出發</span>
                             <input :value="currentDay.flight.startTime"
                                 @input="$emit('update:flight', { ...currentDay.flight, startTime: ($event.target as HTMLInputElement).value })"
                                 type="time"
-                                class="text-2xl font-black bg-transparent border-b border-white/30 w-full text-center text-white placeholder-white/50 focus:outline-none focus:border-white font-mono p-0" />
-                            <div class="text-[9px] opacity-60 mt-1">起飛 (當地時間)</div>
+                                class="font-black bg-transparent border-b border-white/30 w-full text-left text-white placeholder-white/50 focus:outline-none focus:border-white font-mono p-0" />
+                            <div class="text-[10px] opacity-70">起飛 (當地時間)</div>
                             <input :value="currentDay.flight.startAirport"
                                 @input="$emit('update:flight', { ...currentDay.flight, startAirport: ($event.target as HTMLInputElement).value })"
-                                class="text-sm font-bold opacity-90 bg-transparent border-none text-center w-full text-teal-100 placeholder-white/50 focus:ring-0 uppercase p-0"
+                                class="font-bold opacity-90 bg-transparent border-none text-left w-full text-teal-100 placeholder-white/50 focus:ring-0 uppercase p-0"
                                 placeholder="TPE" />
                         </div>
-                        <!-- 資訊 -->
-                        <div class="flex flex-col items-center justify-center w-1/3 px-2">
-                            <i class="ph-fill ph-airplane text-2xl mb-1 transform rotate-90"></i>
+                        <!-- 中間：航班號 -->
+                        <div class="flex flex-col items-center justify-center w-1/3 px-2 gap-1">
+                            <i class="ph-fill ph-airplane text-3xl mb-1 transform rotate-90"></i>
+                            <span class="text-[10px] uppercase tracking-widest opacity-80">航班</span>
                             <input :value="currentDay.flight.number"
                                 @input="$emit('update:flight', { ...currentDay.flight, number: ($event.target as HTMLInputElement).value })"
-                                class="text-[10px] font-mono tracking-widest opacity-80 bg-transparent border-none text-center w-full text-white placeholder-white/50 focus:ring-0 uppercase p-0"
+                                class="text-xs font-mono tracking-[0.3em] opacity-90 bg-transparent border-none text-center w-full text-white placeholder-white/50 focus:ring-0 uppercase p-0"
                                 placeholder="BR198" />
                             <div class="w-full h-0.5 bg-white/30 rounded-full mt-1"></div>
                         </div>
-                        <!-- 抵達 -->
-                        <div class="flex flex-col items-center w-1/3">
+                        <!-- 抵達時間 -->
+                        <div class="flex flex-col items-end w-1/3 gap-1 text-right">
+                            <span class="text-[10px] uppercase tracking-widest opacity-80">抵達</span>
                             <input :value="currentDay.flight.endTime"
                                 @input="$emit('update:flight', { ...currentDay.flight, endTime: ($event.target as HTMLInputElement).value })"
                                 type="time"
-                                class="text-2xl font-black bg-transparent border-b border-white/30 w-full text-center text-white placeholder-white/50 focus:outline-none focus:border-white font-mono p-0" />
+                                class="font-black bg-transparent border-b border-white/30 w-full text-right text-white placeholder-white/50 focus:outline-none focus:border-white font-mono p-0" />
                             <div class="relative w-full mt-0.5">
                                 <select :value="currentDay.flight.arrivalOffset"
                                     @change="$emit('update:flight', { ...currentDay.flight, arrivalOffset: Number(($event.target as HTMLSelectElement).value) })"
-                                    class="appearance-none bg-black/20 text-white text-[9px] rounded border-none w-full py-0.5 px-1 text-center focus:ring-0 cursor-pointer hover:bg-black/30">
+                                    class="appearance-none bg-black/20 text-white text-[10px] rounded border-none w-full py-0.5 px-2 text-right focus:ring-0 cursor-pointer hover:bg-black/30">
                                     <option value="0" class="text-slate-800">同日抵達</option>
                                     <option value="1" class="text-slate-800">+1天 (隔日)</option>
                                     <option value="-1" class="text-slate-800">-1天 (前日)</option>
@@ -56,9 +60,15 @@
                             </div>
                             <input :value="currentDay.flight.endAirport"
                                 @input="$emit('update:flight', { ...currentDay.flight, endAirport: ($event.target as HTMLInputElement).value })"
-                                class="text-sm font-bold opacity-90 bg-transparent border-none text-center w-full text-teal-100 placeholder-white/50 focus:ring-0 uppercase p-0"
+                                class="text-sm font-bold opacity-90 bg-transparent border-none text-right w-full text-teal-100 placeholder-white/50 focus:ring-0 uppercase p-0"
                                 placeholder="NRT" />
                         </div>
+                    </div>
+
+                    <!-- 下排：簡短說明 -->
+                    <div class="mt-1 flex justify-between text-[11px] opacity-80 tracking-wide">
+                        <span>出發機場 / 航班資訊</span>
+                        <span>抵達時間與跨日狀態</span>
                     </div>
                 </div>
             </div>
@@ -69,10 +79,11 @@
             </button>
         </div>
 
-        <!-- 重新同步天氣按鈕 -->
-        <div class="mb-6 flex justify-center">
+        <!-- 重新同步天氣 / 新增國家區塊：同一列左右排版 -->
+        <div class="mb-6 flex gap-3">
+            <!-- 左：重新同步天氣 -->
             <button @click="$emit('reload-day-weather')" :disabled="isDayWeatherLoading" :class="[
-                'flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition shadow-sm',
+                'flex-1 flex items-center justify-center gap-2 rounded-2xl font-medium text-xs sm:text-sm transition shadow-sm py-2 sm:py-2.5',
                 isDayWeatherLoading
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-teal-500 to-blue-500 text-white hover:from-teal-600 hover:to-blue-600 hover:shadow-md'
@@ -81,12 +92,10 @@
                 <i v-else class="ph-bold ph-cloud-arrow-down"></i>
                 <span>{{ isDayWeatherLoading ? '同步中...' : '重新同步天氣' }}</span>
             </button>
-        </div>
 
-        <!-- 新增國家區塊（顯著位置，手機友善） -->
-        <div class="mb-4">
+            <!-- 右：新增國家區塊（顯著位置，手機友善） -->
             <button @click="$emit('show-insert-country-divider-modal', currentDay.items.length)"
-                class="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-teal-500 text-white font-semibold py-3 shadow-md hover:shadow-lg active:scale-[0.99] transition text-sm"
+                class="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 to-teal-500 text-white font-semibold py-2 sm:py-3 shadow-md hover:shadow-lg active:scale-[0.99] transition text-xs sm:text-sm"
                 title="新增國家區塊">
                 <i class="ph-bold ph-flag text-base"></i>
                 <span>新增國家區塊</span>
@@ -105,14 +114,16 @@
                     :is-weather-loading="isItemWeatherLoading(item)" :is-day-weather-loading="isDayWeatherLoading"
                     :weather-display="itemWeatherDisplay(item)" :get-time-period="getTimePeriod"
                     :get-google-map-link="getGoogleMapLink" :get-dot-color="getDotColor"
-                    :is-searching="isSearchingRecs && searchTargetIndex === `${currentDayIdx}-${idx}`"
-                    :recommendations="recommendationsMap[`${currentDayIdx}-${idx}`]"
                     @move-up="$emit('move-item-up', idx)" @move-down="$emit('move-item-down', idx)"
                     @update:item="(field, value) => $emit('update:item', { idx, field, value })"
                     @start-edit-note="$emit('start-edit-note', item)" @remove="$emit('remove-item', idx)"
-                    @region-change="$emit('item-region-change', item)" @clear-region="$emit('clear-item-region', item)"
-                    @search-nearby="$emit('search-nearby', item, idx)"
-                    @apply-recommendation="(rec) => $emit('apply-recommendation', item, rec)" />
+                    @region-change="$emit('item-region-change', item)"
+                    @clear-region="$emit('clear-item-region', item)" />
+                <!-- 美食推薦相關 props 和事件 - 已移除前端功能，保留程式碼 -->
+                <!-- :is-searching="isSearchingRecs && searchTargetIndex === `${currentDayIdx}-${idx}`" -->
+                <!-- :recommendations="recommendationsMap[`${currentDayIdx}-${idx}`]" -->
+                <!-- @search-nearby="$emit('search-nearby', item, idx)" -->
+                <!-- @apply-recommendation="(rec) => $emit('apply-recommendation', item, rec)" -->
             </template>
             <button @click="$emit('add-item')"
                 class="flex items-center gap-2 text-teal-400 hover:text-teal-600 text-sm font-medium px-2 py-1">
@@ -144,9 +155,10 @@ defineProps<{
     getGoogleMapLink: (loc: string) => string;
     getDotColor: (t: string) => string;
     getItemKey: (item: DayItem, idx: number) => string;
-    isSearchingRecs: boolean;
-    searchTargetIndex: string;
-    recommendationsMap: Record<string, Array<{ name: string; location: string }>>;
+    // 美食推薦相關 props - 已移除前端功能，保留程式碼
+    // isSearchingRecs: boolean;
+    // searchTargetIndex: string;
+    // recommendationsMap: Record<string, Array<{ name: string; location: string }>>;
 }>();
 
 defineEmits<{
@@ -165,8 +177,9 @@ defineEmits<{
     'remove-item': [idx: number];
     'add-item': [];
     'remove-current-day': [];
-    'search-nearby': [item: DayItem, idx: number];
-    'apply-recommendation': [item: DayItem, rec: { name: string; location: string }];
+    // 美食推薦相關 emits - 已移除前端功能，保留程式碼
+    // 'search-nearby': [item: DayItem, idx: number];
+    // 'apply-recommendation': [item: DayItem, rec: { name: string; location: string }];
 }>();
 
 </script>

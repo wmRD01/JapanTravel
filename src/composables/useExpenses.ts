@@ -127,26 +127,35 @@ export function useExpenses(
                 splitParticipants: selectedSplits,
             };
 
-            if (isPersonalMode.value) {
-                // 個人記帳模式
-                personalExpenses.value.unshift(expense);
-                saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
-                // 上傳到 Firebase
-                if (useFirebase && isCloudTrip.value && cloudTripId.value) {
-                    await addPersonalExpenseToCloud(cloudTripId.value, expense);
+            try {
+                if (isPersonalMode.value) {
+                    // 個人記帳模式
+                    personalExpenses.value.unshift(expense);
+                    saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
+                    // 上傳到 Firebase（不會觸發全畫面 loading）
+                    if (useFirebase && isCloudTrip.value && cloudTripId.value) {
+                        await addPersonalExpenseToCloud(cloudTripId.value, expense);
+                    }
+                } else {
+                    // 多人記帳模式
+                    if (isCloudTrip.value && cloudTripId.value) {
+                        // 標記為本地更新，避免即時監聽在我們自己寫入時又回撥一次
+                        setIsLocalUpdate(true);
+                    }
+                    // 先更新本地顯示
+                    expenses.value.unshift(expense);
+                    // 將新增紀錄寫入 Firestore（背景執行）
+                    if (useFirebase && isCloudTrip.value && cloudTripId.value) {
+                        await addExpenseToCloud(cloudTripId.value, expense, participants.value);
+                    }
+                    // 觸發後台自動同步（合併多筆操作）
+                    scheduleExpensesAutoSync();
                 }
-            } else {
-                // 多人記帳模式
-                if (isCloudTrip.value && cloudTripId.value) {
-                    setIsLocalUpdate(true);
+            } finally {
+                // 無論成功或失敗，都要恢復本地更新標記，否則後續的遠端更新會被永遠忽略
+            if (isCloudTrip.value && cloudTripId.value) {
+                    setIsLocalUpdate(false);
                 }
-                expenses.value.unshift(expense);
-                // 新增上傳至 Firestore
-                if (useFirebase && isCloudTrip.value && cloudTripId.value) {
-                    await addExpenseToCloud(cloudTripId.value, expense, participants.value);
-                }
-                // 觸發自動同步
-                scheduleExpensesAutoSync();
             }
 
             // 只清空項目和金額，保留時間與付款人
@@ -163,33 +172,41 @@ export function useExpenses(
      */
     const removeExpense = async (idx: number) => {
         if (isPersonalMode.value) {
-            // 個人記帳模式
+            // 個人記帳模式：先刪本地，再嘗試刪除雲端（每一筆獨立處理）
             const target = personalExpenses.value[idx];
             if (!target) return;
 
             personalExpenses.value.splice(idx, 1);
             saveToStorage(currentTripId.value, 'personal_exp', personalExpenses.value);
 
-            // 刪除 Firebase 中的記錄
             if (useFirebase && isCloudTrip.value && cloudTripId.value && target.order) {
-                await deletePersonalExpenseFromCloud(cloudTripId.value, target.order);
+                try {
+                    await deletePersonalExpenseFromCloud(cloudTripId.value, target.order);
+                } catch (e) {
+                    console.error('刪除個人帳務雲端紀錄失敗:', e);
+                    alert('刪除雲端帳務失敗，請稍後再試。');
+                }
             }
         } else {
-            // 多人記帳模式
+            // 多人記帳模式：先刪本地，再獨立通知雲端刪除
             const target = expenses.value[idx];
             if (!target) return;
 
-            // 如果是雲端旅程，標記為本地更新，避免觸發監聽器
-            if (isCloudTrip.value && cloudTripId.value) {
-                setIsLocalUpdate(true);
-                if (target.order && useFirebase) {
-                    await deleteExpenseFromCloud(cloudTripId.value, target.order);
-                }
-            }
-
+            // 先更新本地列表，讓使用者立即看到結果
             expenses.value.splice(idx, 1);
-            // 觸發自動同步
-            scheduleExpensesAutoSync();
+
+            if (useFirebase && isCloudTrip.value && cloudTripId.value && target.order) {
+                // 背景通知 Firestore 刪除這一筆，不影響其他帳務
+                setIsLocalUpdate(true);
+                deleteExpenseFromCloud(cloudTripId.value, target.order)
+                    .catch((e) => {
+                        console.error('刪除共享帳務雲端紀錄失敗:', e);
+                        alert('刪除雲端帳務失敗，請稍後再試。');
+                    })
+                    .finally(() => {
+                        setIsLocalUpdate(false);
+                    });
+            }
         }
     };
 

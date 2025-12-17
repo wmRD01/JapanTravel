@@ -80,12 +80,13 @@ export async function searchRestaurantsNearby(
     lat: number,
     lon: number,
     radius = 1200,
-    limit = 6
+    limit = 100
 ): Promise<PlaceResult[]> {
     const key = getApiKey();
     if (!key || !lat || !lon) return [];
     const url = `https://api.geoapify.com/v2/places?categories=catering.restaurant&filter=circle:${lon},${lat},${radius}&bias=proximity:${lon},${lat}&limit=${limit}&lang=zh&apiKey=${key}`;
     try {
+
         const res = await fetch(url);
         const data = await res.json();
         const features = data?.features || [];

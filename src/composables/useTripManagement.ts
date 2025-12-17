@@ -2,7 +2,7 @@
  * 旅程管理 Composable
  * 處理旅程的建立、刪除、切換和模板載入
  */
-import { type Ref } from 'vue';
+import { ref, type Ref } from 'vue';
 import { DEFAULT_EXCHANGE_RATE, DEFAULT_PARTICIPANTS_STR, WEEKDAY_ZH } from '../constants/index';
 import type { Day, Expense, Setup, TripMeta } from '../types/index';
 import { formatDate, getTodayDateStr } from '../utils/date';
@@ -39,12 +39,25 @@ export function useTripManagement(
     JP_TRIP_DATA: Day[],
     JP_EXPENSES: Expense[]
 ) {
+    // 讀取旅程的載入狀態（用於 Loading 畫面）
+    const isLoadingTrip = ref(false);
     /**
      * 載入旅程列表
      */
     const loadTripList = () => {
-        const list = localStorage.getItem('travel_app_index');
-        tripList.value = list ? JSON.parse(list) : [];
+        // 從 localStorage 載入旅程清單，並加上防呆避免 JSON 解析失敗造成整個初始化中斷
+        const raw = localStorage.getItem('travel_app_index');
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                tripList.value = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                console.error('讀取 travel_app_index 失敗，已重置為空陣列:', e);
+                tripList.value = [];
+            }
+        } else {
+            tripList.value = [];
+        }
 
         // 自動載入日本預設行程 (如果尚未存在)
         const hasDefault = tripList.value.find((t) => t.id === JP_TRIP_ID);
@@ -179,67 +192,79 @@ export function useTripManagement(
      * 切換旅程
      */
     const switchTrip = async (id: string) => {
-        currentTripId.value = id;
-        // 保存當前選擇的旅程 ID 到 localStorage
-        localStorage.setItem('last_selected_trip_id', id);
-        showTripMenu.value = false;
-        // 重置到第一天
-        currentDayIdx.value = 0;
+        isLoadingTrip.value = true;
+        try {
+            currentTripId.value = id;
+            // 保存當前選擇的旅程 ID 到 localStorage
+            localStorage.setItem('last_selected_trip_id', id);
+            showTripMenu.value = false;
+            // 重置到第一天
+            currentDayIdx.value = 0;
 
-        // 載入本地資料
-        days.value = loadFromStorage<Day[]>(id, 'days', []) || [];
-        expenses.value = loadFromStorage<Expense[]>(id, 'exp', []) || [];
-        personalExpenses.value = loadFromStorage<Expense[]>(id, 'personal_exp', []) || [];
+            // 載入本地資料
+            days.value = loadFromStorage<Day[]>(id, 'days', []) || [];
+            expenses.value = loadFromStorage<Expense[]>(id, 'exp', []) || [];
+            personalExpenses.value = loadFromStorage<Expense[]>(id, 'personal_exp', []) || [];
 
-        const lUsers = localStorage.getItem(getStorageKey(id, 'users'));
-        const lRate = localStorage.getItem(getStorageKey(id, 'rate'));
-        const lConf = loadFromStorage(id, 'config');
-        const lCloud = loadFromStorage(id, 'cloud');
+            // 安全防呆：如果是預設日本行程，但本地 days 為空，重新寫入預設資料
+            if (id === JP_TRIP_ID && (!days.value || days.value.length === 0)) {
+                console.warn('偵測到預設日本行程資料遺失，重新載入內建行程資料。');
+                days.value = [...JP_TRIP_DATA];
+                saveToStorage(JP_TRIP_ID, 'days', JP_TRIP_DATA);
+            }
 
-        // 檢查是否為雲端旅程
-        let cloudSyncSuccess = false;
-        if (lCloud) {
-            cloudTripId.value = lCloud.cloudTripId || null;
-            inviteCode.value = lCloud.inviteCode || '';
-            isCloudTrip.value =
-                lCloud.isCloudTrip !== undefined ? lCloud.isCloudTrip : !!cloudTripId.value;
+            const lUsers = localStorage.getItem(getStorageKey(id, 'users'));
+            const lRate = localStorage.getItem(getStorageKey(id, 'rate'));
+            const lConf = loadFromStorage(id, 'config');
+            const lCloud = loadFromStorage(id, 'cloud');
 
-            // 如果是雲端旅程，自動同步資料並設定即時監聽
-            if (isCloudTrip.value && cloudTripId.value) {
-                try {
-                    await syncFromCloud();
-                    cloudSyncSuccess = true;
-                    await setupExpensesRealtimeListener();
-                } catch (error) {
-                    console.error('雲端同步失敗，將使用本地資料:', error);
-                    cloudSyncSuccess = false;
+            // 檢查是否為雲端旅程
+            let cloudSyncSuccess = false;
+            if (lCloud) {
+                cloudTripId.value = lCloud.cloudTripId || null;
+                inviteCode.value = lCloud.inviteCode || '';
+                isCloudTrip.value =
+                    lCloud.isCloudTrip !== undefined ? lCloud.isCloudTrip : !!cloudTripId.value;
+
+                // 如果是雲端旅程，自動同步資料並設定即時監聽
+                if (isCloudTrip.value && cloudTripId.value) {
+                    try {
+                        await syncFromCloud();
+                        cloudSyncSuccess = true;
+                        await setupExpensesRealtimeListener();
+                    } catch (error) {
+                        console.error('雲端同步失敗，將使用本地資料:', error);
+                        cloudSyncSuccess = false;
+                    }
+                } else {
+                    // 如果不是雲端旅程，使用本地資料
+                    if (lUsers) {
+                        participantsStr.value = lUsers;
+                        updateParticipants();
+                    }
                 }
             } else {
-                // 如果不是雲端旅程，使用本地資料
+                isCloudTrip.value = false;
+                cloudTripId.value = null;
+                inviteCode.value = '';
+                // 非雲端旅程，使用本地資料
                 if (lUsers) {
                     participantsStr.value = lUsers;
                     updateParticipants();
                 }
             }
-        } else {
-            isCloudTrip.value = false;
-            cloudTripId.value = null;
-            inviteCode.value = '';
-            // 非雲端旅程，使用本地資料
-            if (lUsers) {
-                participantsStr.value = lUsers;
-                updateParticipants();
+            if (lRate) exchangeRate.value = parseFloat(lRate);
+
+            // 載入本地 config（僅在非雲端旅程，或雲端旅程同步失敗時使用）
+            if (lConf && !cloudSyncSuccess) {
+                setup.value = lConf;
             }
-        }
-        if (lRate) exchangeRate.value = parseFloat(lRate);
 
-        // 載入本地 config（僅在非雲端旅程，或雲端旅程同步失敗時使用）
-        if (lConf && !cloudSyncSuccess) {
-            setup.value = lConf;
-        }
-
-        if (!isPersonalMode.value) {
-            resetNewExpenseSplits();
+            if (!isPersonalMode.value) {
+                resetNewExpenseSplits();
+            }
+        } finally {
+            isLoadingTrip.value = false;
         }
     };
 
@@ -351,6 +376,7 @@ export function useTripManagement(
     return {
         loadTripList,
         saveTripList,
+        isLoadingTrip,
         createNewTrip,
         initTrip,
         deleteTrip,

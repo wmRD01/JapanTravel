@@ -1,5 +1,5 @@
 <template>
-    <div class="bg-teal-600 text-white rounded-2xl p-6 shadow-lg mb-6 text-center relative">
+    <div class="bg-teal-600 text-white rounded-2xl p-6 shadow-lg mb-6 relative">
         <div class="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
             <!-- 個人/多人記帳切換按鈕 -->
             <button
@@ -43,9 +43,17 @@
                 </div>
             </div>
         </div>
-        <div class="text-sm opacity-80 mb-1">{{ isPersonalMode ? '個人總支出' : '總支出 Total' }}</div>
-        <div class="text-4xl font-bold font-mono">{{ currencySymbol }} {{ totalExpense.toLocaleString() }}</div>
-        <div class="text-lg font-bold text-teal-200 mt-1">≈ NT$ {{ totalExpenseInTWD.toLocaleString() }}</div>
+        <div class="text-left">
+            <div class="text-sm opacity-80 mb-1">
+                {{ isPersonalMode ? '個人總支出' : '總支出 Total' }}
+            </div>
+            <div class="text-4xl font-bold font-mono leading-tight">
+                {{ currencySymbol }} {{ totalExpense.toLocaleString() }}
+            </div>
+            <div class="text-lg font-bold text-teal-200 mt-1">
+                ≈ NT$ {{ totalExpenseInTWD.toLocaleString() }}
+            </div>
+        </div>
     </div>
 </template>
 

@@ -185,22 +185,27 @@ export function useCloudExpenses(
             remoteCount: remoteFormatted.length,
         });
 
-        // 標記為本地更新，避免觸發監聽器
+        // 這裡是「遠端 → 本地」更新：
+        // - 先暫時標記為本地更新，避免我們自己寫入 expenses 時又觸發 onSnapshot 的遞迴更新
+        // - 完成後一定要還原，否則後續真正來自遠端的更新會被永遠忽略
         setIsLocalUpdate(true);
+        try {
+            expenses.value = updatedExpenses;
 
-        expenses.value = updatedExpenses;
+            // 儲存到 localStorage
+            if (currentTripId.value) {
+                localStorage.setItem(
+                    `${currentTripId.value}_exp`,
+                    JSON.stringify(expenses.value)
+                );
+            }
 
-        // 儲存到 localStorage
-        if (currentTripId.value) {
-            localStorage.setItem(
-                `${currentTripId.value}_exp`,
-                JSON.stringify(expenses.value)
-            );
+            console.log('✅ Expenses 已依據 Firestore 最新資料完成合併:', {
+                total: expenses.value.length,
+            });
+        } finally {
+            setIsLocalUpdate(false);
         }
-
-        console.log('✅ Expenses 已依據 Firestore 最新資料完成合併:', {
-            total: expenses.value.length,
-        });
     };
 
     /**

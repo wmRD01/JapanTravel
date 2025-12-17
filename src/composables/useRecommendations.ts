@@ -18,6 +18,8 @@ export function useRecommendations() {
 
         try {
             const geo = await geocodeText(item.location);
+            console.log(geo);
+
             if (!geo) {
                 recommendationsMap[key] = [
                     { name: '找不到地點，請改用更明確地址', location: item.location, note: '' },
@@ -25,15 +27,17 @@ export function useRecommendations() {
                 return;
             }
 
-            const places = await searchRestaurantsNearby(geo.lat, geo.lon, 1200, 6);
+            const places = await searchRestaurantsNearby(geo.lat, geo.lon, 1200, 100);
             if (!places.length) {
                 recommendationsMap[key] = [
                     { name: '找不到推薦，請嘗試更精確地點', location: item.location, note: '' },
                 ];
                 return;
             }
+            const randomPlaces = places.sort(() => Math.random() - 0.5).slice(0, 10);
 
-            recommendationsMap[key] = places.map((p) => ({
+
+            recommendationsMap[key] = randomPlaces.map((p) => ({
                 name: p.name,
                 location: p.address || p.name,
                 note: '推薦地點',
@@ -47,9 +51,12 @@ export function useRecommendations() {
         }
     };
 
-    const applyRecommendation = (item: DayItem, rec: Recommendation): void => {
-        item.activity = rec.name;
-        item.location = rec.location;
+    const applyRecommendation = (_item: DayItem, rec: Recommendation): void => {
+        // 點擊推薦時，不再直接修改行程項目內容
+        // 僅開啟 Google Maps 讓使用者查看店家位置
+        const query = encodeURIComponent(rec.location || rec.name);
+        const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
+        window.open(url, '_blank');
     };
 
     return {
