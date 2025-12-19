@@ -4,7 +4,7 @@
             class="snap-center shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl cursor-pointer transition-all border-2 camp-day"
             :class="currentDayIdx === index ? 'camp-day-active scale-105 translate-y-[1px]' : 'camp-day-inactive'">
             <span class="text-xs font-medium opacity-80">{{ day.shortDate }}</span>
-            <span class="text-lg font-bold">D{{ index }}</span>
+            <span class="text-lg font-bold">D{{ index + 1 }}</span>
         </div>
         <button @click="$emit('add-day')"
             class="shrink-0 w-12 h-16 rounded-xl flex items-center justify-center border-2 border-dashed camp-day-add transition"

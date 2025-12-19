@@ -7,10 +7,10 @@
                 <div class="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full z-10"
                     style="background: #666666"></div>
                 <div class="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full z-10"
-                    style="background: #666666"></div>
+                    style="background: #666666"></div>                                                                                                                                                                                                                                                   
                 <div class="px-4 pt-4 pb-3 relative z-0 space-y-3">
-                    <button @click="$emit('toggle-flight-card')"
-                        class="absolute top-2 right-2 text-white/50 hover:text-white hover:bg-white/20 rounded-full p-1 transition">
+                    <button @click="$emit('toggle-flight-card')" class="absolute top-0
+                         right-2 text-white hover:text-white hover:bg-white/20 rounded-full transition">
                         <i class="ph-bold ph-x"></i>
                     </button>
                     <!-- 上排：時間與航班號 -->

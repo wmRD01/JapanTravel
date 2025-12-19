@@ -79,7 +79,7 @@
                 :class="currentDayIdx === index ? 'camp-day-active scale-105' : 'camp-day-inactive'"
             >
                 <span class="text-xs font-medium opacity-80">{{ day.shortDate }}</span>
-                <span class="text-lg font-bold">D{{ index }}</span>
+                <span class="text-lg font-bold">D{{ index + 1 }}</span>
             </div>
             <button
                 @click="addDay"
