@@ -253,7 +253,13 @@ export function useTripManagement(
                     updateParticipants();
                 }
             }
-            if (lRate) exchangeRate.value = parseFloat(lRate);
+
+            // 匯率：
+            // - 雲端旅程且同步成功：優先使用 Firebase 回傳的 tripData.config.rate（在 syncFromCloud 中處理）
+            // - 非雲端旅程或雲端同步失敗：才使用本地儲存的 lRate
+            if (lRate && !cloudSyncSuccess) {
+                exchangeRate.value = parseFloat(lRate);
+            }
 
             // 載入本地 config（僅在非雲端旅程，或雲端旅程同步失敗時使用）
             if (lConf && !cloudSyncSuccess) {
