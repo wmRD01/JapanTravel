@@ -104,7 +104,7 @@
                 :owed-by-person="owedByPerson" :settlement-plan="settlementPlan" :new-expense="newExpense"
                 :current-expenses="currentExpenses" :get-settlement-key="getSettlementKey"
                 :get-expense-key="getExpenseKey" @toggle-personal-mode="isPersonalMode = !isPersonalMode"
-                @currency-change="fetchRateByCurrency" @update:exchangeRate="exchangeRate = $event"
+                @currency-change="fetchRateByCurrency" @update:exchangeRate="(value: number) => { exchangeRate = value; setup.rate = value; }"
                 @update-participants="(value: string) => { participantsStr = value; updateParticipants(); }"
                 @update:newExpense="newExpense = $event" @select-all-splits="selectAllSplits" @add-expense="addExpense"
                 @remove-expense="removeExpense" />
