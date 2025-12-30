@@ -52,8 +52,8 @@
                     </div>
                     <!-- 內容輸入 -->
                     <div class="flex-1 min-w-0 pt-1">
-                        <input :value="item.activity"
-                            @input="updateItem('activity', ($event.target as HTMLInputElement).value)"
+                        <input :value="localActivity" @input="handleActivityInput" @blur="handleActivityBlur"
+                            @keyup.enter="handleActivityBlur"
                             class="block w-full font-bold text-slate-800 bg-transparent border-none p-0 focus:ring-0"
                             placeholder="行程名稱..." />
                         <div class="flex items-center gap-1 mt-1">
@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { DayItem } from '../types/index';
 
 interface Props {
@@ -253,6 +253,14 @@ const emit = defineEmits<{
 //     );
 // };
 
+// 本地狀態管理行程名稱，避免每次輸入都觸發重新渲染
+const localActivity = ref(props.item.activity);
+
+// 監聽 props 變化，同步本地狀態（當外部更新時）
+watch(() => props.item.activity, (newValue) => {
+    localActivity.value = newValue;
+}, { immediate: true });
+
 const isFirst = computed(() => props.idx === 0);
 const isLast = computed(() => props.idx === props.totalItems - 1);
 const timePeriod = computed(() => props.getTimePeriod(props.item.time));
@@ -263,6 +271,18 @@ const googleMapLink = computed(() =>
 
 const updateItem = (field: string, value: any) => {
     emit('update:item', field, value);
+};
+
+// 處理行程名稱輸入（只更新本地狀態）
+const handleActivityInput = (event: Event) => {
+    localActivity.value = (event.target as HTMLInputElement).value;
+};
+
+// 處理行程名稱失去焦點（更新父組件）
+const handleActivityBlur = () => {
+    if (localActivity.value !== props.item.activity) {
+        updateItem('activity', localActivity.value);
+    }
 };
 
 const openTimePicker = (event: Event) => {
