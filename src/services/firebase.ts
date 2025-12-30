@@ -2,9 +2,7 @@ import { FirebaseConfig } from '../../data/trip-data.js';
 import {
     DB_WAIT_INTERVAL,
     DB_WAIT_MAX_ATTEMPTS,
-    FIREBASE_APP_URL,
-    FIREBASE_FIRESTORE_URL,
-    useFirebase,
+    useFirebase
 } from '../constants/index.js';
 import type { FirebaseConfig as FirebaseConfigType, FirebaseReadyResult } from '../types/index';
 

@@ -2,6 +2,8 @@ import vue from '@vitejs/plugin-vue';
 import obfuscator from 'rollup-plugin-obfuscator';
 import { defineConfig } from 'vite';
 
+//開關log要修改三個地方disableConsoleOutput、drop_console、drop_debugger
+
 export default defineConfig(({ mode }) => {
     const isProduction = mode === 'production';
 
@@ -28,12 +30,26 @@ export default defineConfig(({ mode }) => {
         build: {
             outDir: 'docs',  // 你希望的輸出資料夾
             emptyOutDir: true,     // 建議清空舊輸出
+            minify: 'terser', // 使用 terser 進行壓縮（支援移除 console）
+            terserOptions: {
+                compress: {
+                    drop_console: true, // 移除所有 console.* 調用（console.log, console.warn, console.error 等）
+                    drop_debugger: true, // 移除 debugger 語句
+                },
+            },
             rollupOptions: {
                 plugins: [
                     // 只在 production 模式下啟用混淆
                     isProduction && obfuscator({
-                        // 排除 constants 檔案，保護 Firebase URL 常數不被混淆
-                        exclude: ['**/constants/index.js', '**/constants/index.ts'],
+                        // 排除 Firebase 相關檔案，保護動態導入和關鍵功能
+                        exclude: [
+                            '**/constants/index.js',
+                            '**/constants/index.ts',
+                            '**/services/firebase.js',
+                            '**/services/firebase.ts',
+                            '**/services/cloudTripService.js',
+                            '**/services/cloudTripService.ts',
+                        ],
                         // rollup-plugin-obfuscator 的配置結構
                         options: {
                             // 基本混淆選項
@@ -76,7 +92,7 @@ export default defineConfig(({ mode }) => {
                             // 其他選項
                             debugProtection: false,
                             debugProtectionInterval: 0,
-                            disableConsoleOutput: false,
+                            disableConsoleOutput: true, // 移除 console 輸出（與 terser 配合）
                             unicodeEscapeSequence: true, // 啟用 Unicode 轉義，加強隱藏
 
                             // 保留關鍵字串（Firebase 集合名稱和 API 方法，但不包括 API Key）
