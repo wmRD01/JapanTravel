@@ -17,16 +17,18 @@ let db: any = null;
 // 統一載入 Firebase App 模組
 export const loadFirebaseApp = async (): Promise<any> => {
     if (firebaseAppModule) return firebaseAppModule;
+    // 直接使用完整字串字面量，避免被混淆工具改變 URL
     // @ts-ignore - 動態導入 URL，Vite 無法靜態分析
-    firebaseAppModule = await import(/* @vite-ignore */ FIREBASE_APP_URL);
+    firebaseAppModule = await import(/* @vite-ignore */ 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
     return firebaseAppModule;
 };
 
 // 統一載入 Firebase Firestore 模組
 export const loadFirebaseFirestore = async (): Promise<any> => {
     if (firebaseFirestoreModule) return firebaseFirestoreModule;
+    // 直接使用完整字串字面量，避免被混淆工具改變 URL
     // @ts-ignore - 動態導入 URL，Vite 無法靜態分析
-    firebaseFirestoreModule = await import(/* @vite-ignore */ FIREBASE_FIRESTORE_URL);
+    firebaseFirestoreModule = await import(/* @vite-ignore */ 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
     return firebaseFirestoreModule;
 };
 
